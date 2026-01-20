@@ -1,0 +1,131 @@
+import { Proceso, ColaboradorLog } from "@/types";
+import { differenceInSeconds, addSeconds } from "date-fns";
+
+export interface ProductivityStats {
+    velocidadActual: number;
+    eficiencia: number;
+    tiempoRestanteStr: string;
+    segundosTotalesRestantes: number;
+    porcentajeCompletado: number;
+    isTiempoExtra: boolean;
+    isGracePeriod: boolean;
+    numColaboradores: number;
+}
+
+export function calculateProductivity(proceso: Proceso, colaboradores: ColaboradorLog[]): ProductivityStats {
+    const {
+        cantidadProducir,
+        trabajoCompletado,
+        velocidadTeorica, // Vper (units per minute)
+        estado,
+        inicioPeriodoGracia
+    } = proceso;
+
+    // 1. Filtrar colaboradores activos de tipo 'colaborador'
+    const activos = colaboradores.filter(c => !c.horaSalida && c.tipo === 'colaborador');
+    const numColaboradores = activos.length;
+
+    // 2. Cálculo de Velocidad del Equipo (Vequipo)
+    const velocidadEquipoMin = velocidadTeorica * numColaboradores;
+
+    // 3. Trabajo Restante
+    const unidadesRestantes = Math.max(0, cantidadProducir - trabajoCompletado);
+    const porcentajeCompletado = Math.min(100, (trabajoCompletado / cantidadProducir) * 100);
+
+    let segundosTotalesRestantes = 0;
+    let isTiempoExtra = false;
+    let isGracePeriod = !!inicioPeriodoGracia;
+
+    // --- LÓGICA DE TIEMPO RESTANTE ---
+    
+    // Si tiene un tiempo guardado (pausado), usarlo como base
+    if ((proceso as any).tiempoRestanteAlPausar !== null && (proceso as any).tiempoRestanteAlPausar !== undefined) {
+        // Tiene un tiempo guardado: si está pausado, devolver ese valor
+        // Si está 'Iniciado' (reanudado), restar el tiempo que ha pasado desde la reanudación
+        const tiempoGuardado = (proceso as any).tiempoRestanteAlPausar;
+        
+        if (estado === 'Iniciado' && proceso.ultimoUpdate) {
+            // Reanudado: restar el tiempo transcurrido desde ultimoUpdate
+            const now = new Date();
+            const reanudeTime = (proceso.ultimoUpdate as any).toDate?.() || new Date(proceso.ultimoUpdate);
+            const elapsedSeconds = differenceInSeconds(now, reanudeTime);
+            segundosTotalesRestantes = Math.max(0, tiempoGuardado - elapsedSeconds);
+        } else {
+            // Pausado: devolver el tiempo guardado sin cambios
+            segundosTotalesRestantes = tiempoGuardado;
+        }
+        
+        // Verificar si es tiempo extra (negativo)
+        isTiempoExtra = tiempoGuardado < 0;
+        if (isTiempoExtra) {
+            segundosTotalesRestantes = Math.abs(segundosTotalesRestantes);
+        }
+        // Mantener el valor de isGracePeriod original para determinar color
+    } else {
+        // Sin tiempo guardado: cálculo normal
+        let nowRef = new Date();
+        const isPausado = estado === 'Pausado' || (proceso as any).pausadoPorFaltaDePersonal;
+        
+        if (isPausado && proceso.ultimoUpdate) {
+            nowRef = (proceso.ultimoUpdate as any).toDate?.() || new Date(proceso.ultimoUpdate);
+        } else if (estado === 'Finalizado' && proceso.horaFinReal) {
+            nowRef = (proceso.horaFinReal as any).toDate?.() || new Date(proceso.horaFinReal);
+        }
+
+        if (isGracePeriod) {
+            // Lógica 2: Período de gracia fijo (15 minutos)
+            const inicioGracia = (inicioPeriodoGracia as any).toDate?.() || new Date(inicioPeriodoGracia);
+            const finGracia = addSeconds(inicioGracia, 15 * 60);
+            segundosTotalesRestantes = differenceInSeconds(finGracia, nowRef);
+        } else if (numColaboradores > 0 && (estado === 'Iniciado' || estado === 'Pausado' || estado === 'Finalizado')) {
+            // Lógica 4: Cálculo dinámico
+            if (velocidadEquipoMin > 0) {
+                const minutosTrabajoRestante = unidadesRestantes / velocidadEquipoMin;
+
+                // Cálculo normal: se suman los minutos de trabajo y los 15 de gracia.
+                const segundosTrabajoRestante = minutosTrabajoRestante * 60;
+                const segundosGracia = 15 * 60;
+                segundosTotalesRestantes = segundosTrabajoRestante + segundosGracia;
+            }
+        }
+
+        // Manejo de tiempo extra (negativo)
+        if (segundosTotalesRestantes < 0) {
+            isTiempoExtra = true;
+            segundosTotalesRestantes = Math.abs(segundosTotalesRestantes);
+        }
+    }
+
+    // Formatear string
+    let tiempoRestanteStr = "00:00:00";
+    if (numColaboradores === 0 && estado === 'Iniciado') {
+        tiempoRestanteStr = "PERSONAL REQUERIDO";
+    } else {
+        const h = Math.floor(segundosTotalesRestantes / 3600);
+        const m = Math.floor((segundosTotalesRestantes % 3600) / 60);
+        const s = Math.floor(segundosTotalesRestantes % 60);
+        tiempoRestanteStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    // Eficiencia (%) -> Basada en el cumplimiento del objetivo teórico
+    const eficiencia = velocidadTeorica > 0 ? ((trabajoCompletado / (cantidadProducir || 1)) * 100) : 0;
+
+    return {
+        velocidadActual: velocidadEquipoMin,
+        eficiencia: Number(eficiencia.toFixed(1)),
+        tiempoRestanteStr,
+        segundosTotalesRestantes,
+        porcentajeCompletado: Number(porcentajeCompletado.toFixed(1)),
+        isTiempoExtra,
+        isGracePeriod,
+        numColaboradores
+    };
+}
+
+export function formatSeconds(totalSeconds: number): string {
+    if (totalSeconds < 0) return "00:00:00";
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = Math.floor(totalSeconds % 60);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
