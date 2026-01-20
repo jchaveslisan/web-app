@@ -824,7 +824,7 @@ export default function MonitoreoPage() {
             {showModalBulkExit && (
                 <ModalBulkExit
                     procesoId={id}
-                    userId={user?.uid}
+                    userId={(user as any)?.uid}
                     onClose={() => setShowModalBulkExit(false)}
                     onSuccess={(exitCount) => {
                         setStaffMessage({
