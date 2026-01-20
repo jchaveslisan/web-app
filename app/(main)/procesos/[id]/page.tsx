@@ -34,7 +34,7 @@ import { ColaboradorMaestro } from '@/types';
 // Helper para determinar el tipo de proceso (backward compatibility)
 const getTipoProcesoReal = (proceso: any) => {
     if (proceso.clasificacion) return proceso.clasificacion;
-    
+
     // Deducir del contenido si no tiene clasificacion (procesos anteriores)
     if (!proceso.utilizaTemporizador && !proceso.contabilizaSetup) {
         // Si no tiene temporizador ni setup, podría ser anexo
@@ -158,7 +158,7 @@ export default function MonitoreoPage() {
             // Calcular el tiempo restante en el momento de la pausa
             const stats = calculateProductivity(proceso, colaboradores);
             const tiempoRestanteAlPausar = stats.segundosTotalesRestantes;
-            
+
             await updateProceso(id, {
                 estado: 'Pausado',
                 trabajoCompletado: calculatedUnits,
@@ -174,7 +174,7 @@ export default function MonitoreoPage() {
                 });
                 // Al cambiar personal, sincronizamos las unidades calculadas
                 const updatesToProcess: any = { trabajoCompletado: calculatedUnits };
-                
+
                 // Auto-pausar cuando no queda personal (independiente del tipo de proceso)
                 const personalRestante = colaboradores.filter(c => c.id !== pendingExitLog.id && !c.horaSalida).length;
                 const tipoActual = getTipoProcesoReal(proceso);
@@ -182,13 +182,13 @@ export default function MonitoreoPage() {
                     // Calcular el tiempo restante en el momento de la pausa automática
                     const stats = calculateProductivity(proceso, colaboradores);
                     const tiempoRestanteAlPausar = stats.segundosTotalesRestantes;
-                    
+
                     updatesToProcess.estado = 'Pausado';
                     updatesToProcess.ultimoUpdate = Timestamp.now();
                     updatesToProcess.pausadoPorFaltaDePersonal = true; // Marcar como pausa automática
                     updatesToProcess.tiempoRestanteAlPausar = tiempoRestanteAlPausar; // Guardar el tiempo restante
                 }
-                
+
                 await updateProceso(id, updatesToProcess);
                 await addEventoLog(id, "Salida de Personal", `Salida de ${pendingExitLog.nombre}: ${justificacion}`, "PERSONAL", user?.username || 'sistema');
 
@@ -508,7 +508,7 @@ export default function MonitoreoPage() {
                     {/* INFORMACIÓN DEL PROCESO - Interfaz adaptada según tipo de proceso */}
                     {(() => {
                         const tipoProc = getTipoProcesoReal(proceso);
-                        
+
                         // Para procesos de tipo 'otros' (con orden de producción, sin temporizador)
                         if (tipoProc === 'otros') {
                             return (
@@ -541,7 +541,7 @@ export default function MonitoreoPage() {
                                 </div>
                             );
                         }
-                        
+
                         // Para procesos de tipo 'anexos' (sin orden de producción, sin temporizador)
                         if (tipoProc === 'anexos') {
                             return (
@@ -554,11 +554,11 @@ export default function MonitoreoPage() {
                                 </div>
                             );
                         }
-                        
+
                         // Para procesos de tipo 'empaque' o por defecto, no mostrar sección (se muestra en columna derecha)
                         return null;
                     })()}
-                    
+
                     <div className="glass rounded-[3rem] p-12 flex flex-col items-center justify-center relative overflow-hidden group shadow-2xl border-white/5 flex-1 min-h-[500px]">
                         {/* Progress Bar */}
                         {proceso.estado !== 'Registrado' && (
@@ -721,7 +721,7 @@ export default function MonitoreoPage() {
                                     {['supervisor', 'superadmin'].includes(user?.rol || '') && personalActivo > 0 && proceso.estado === 'Pausado' && (
                                         <button
                                             onClick={() => setShowModalBulkExit(true)}
-                                            disabled={proceso.estado === 'Finalizado'}
+                                            disabled={(proceso.estado as string) === 'Finalizado'}
                                             className="bg-warning-yellow text-black px-8 py-4 rounded-2xl font-black text-sm uppercase flex items-center gap-3 hover:bg-yellow-600 disabled:opacity-50 transition-colors shadow-lg shadow-yellow-500/10 ml-auto"
                                         >
                                             <LogOut className="h-5 w-5" /> Salida Grupal
@@ -739,72 +739,72 @@ export default function MonitoreoPage() {
                     <div className="col-span-12 lg:col-span-4 flex flex-col gap-6 overflow-auto pr-1">
 
 
-                    {/* PRODUCTION DATA (SIDEBAR) */}
-                    <div className="glass rounded-[2.5rem] p-8 bg-gradient-to-br from-white/[0.05] to-transparent border-white/5">
-                        <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
-                            <ClipboardList className="h-6 w-6 text-accent-purple" />
-                            <h3 className="text-lg font-black tracking-widest uppercase">Información del Proceso</h3>
-                        </div>
-
-                        <div className="space-y-6">
-                            {/* Producto */}
-                            <div className="space-y-1">
-                                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Producto en proceso</p>
-                                <h4 className="text-2xl font-black text-white leading-tight uppercase line-clamp-2">{proceso.producto}</h4>
+                        {/* PRODUCTION DATA (SIDEBAR) */}
+                        <div className="glass rounded-[2.5rem] p-8 bg-gradient-to-br from-white/[0.05] to-transparent border-white/5">
+                            <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
+                                <ClipboardList className="h-6 w-6 text-accent-purple" />
+                                <h3 className="text-lg font-black tracking-widest uppercase">Información del Proceso</h3>
                             </div>
 
-                            {/* Líder de Línea - Solo para procesos con temporizador */}
-                            {proceso.utilizaTemporizador && (
-                                <div className="space-y-1 bg-primary-blue/10 p-5 rounded-2xl border border-primary-blue/10">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <Users className="h-4 w-4 text-primary-blue" />
-                                        <p className="text-[10px] font-black text-primary-blue uppercase tracking-widest">Líder de Línea</p>
+                            <div className="space-y-6">
+                                {/* Producto */}
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Producto en proceso</p>
+                                    <h4 className="text-2xl font-black text-white leading-tight uppercase line-clamp-2">{proceso.producto}</h4>
+                                </div>
+
+                                {/* Líder de Línea - Solo para procesos con temporizador */}
+                                {proceso.utilizaTemporizador && (
+                                    <div className="space-y-1 bg-primary-blue/10 p-5 rounded-2xl border border-primary-blue/10">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Users className="h-4 w-4 text-primary-blue" />
+                                            <p className="text-[10px] font-black text-primary-blue uppercase tracking-widest">Líder de Línea</p>
+                                        </div>
+                                        <h4 className="text-xl font-black text-white uppercase truncate">{proceso.lider}</h4>
                                     </div>
-                                    <h4 className="text-xl font-black text-white uppercase truncate">{proceso.lider}</h4>
-                                </div>
-                            )}
+                                )}
 
-                            {/* Orden / Lote / Etapa Grid */}
-                            <div className="grid grid-cols-1 gap-3">
-                                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                                    <p className="text-[10px] font-black text-gray-500 uppercase">Orden de Producción</p>
-                                    <p className="text-lg font-mono font-black text-white">{proceso.ordenProduccion}</p>
-                                </div>
-                                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                                    <p className="text-[10px] font-black text-gray-500 uppercase">Lote / Etapa</p>
-                                    <p className="text-lg font-black text-white uppercase">{proceso.lote} / {proceso.etapa}</p>
+                                {/* Orden / Lote / Etapa Grid */}
+                                <div className="grid grid-cols-1 gap-3">
+                                    <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                        <p className="text-[10px] font-black text-gray-500 uppercase">Orden de Producción</p>
+                                        <p className="text-lg font-mono font-black text-white">{proceso.ordenProduccion}</p>
+                                    </div>
+                                    <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                                        <p className="text-[10px] font-black text-gray-500 uppercase">Lote / Etapa</p>
+                                        <p className="text-lg font-black text-white uppercase">{proceso.lote} / {proceso.etapa}</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    {/* METRICS (SIDEBAR) - Solo para procesos con temporizador */}
-                    {proceso.utilizaTemporizador && (
-                        <div className="space-y-4">
-                            <div className="glass p-6 rounded-3xl flex items-center gap-5 border-l-4 border-primary-blue shadow-md">
-                                <div className="p-4 bg-primary-blue/10 rounded-2xl">
-                                    <Activity className="h-7 w-7 text-primary-blue" />
+                        {/* METRICS (SIDEBAR) - Solo para procesos con temporizador */}
+                        {proceso.utilizaTemporizador && (
+                            <div className="space-y-4">
+                                <div className="glass p-6 rounded-3xl flex items-center gap-5 border-l-4 border-primary-blue shadow-md">
+                                    <div className="p-4 bg-primary-blue/10 rounded-2xl">
+                                        <Activity className="h-7 w-7 text-primary-blue" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Velocidad Equipo</p>
+                                        <h3 className="text-3xl font-black tracking-tight">{stats.velocidadActual} <span className="text-xs text-gray-500">est/min</span></h3>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Velocidad Equipo</p>
-                                    <h3 className="text-3xl font-black tracking-tight">{stats.velocidadActual} <span className="text-xs text-gray-500">est/min</span></h3>
+
+                                <div className="glass p-6 rounded-3xl flex items-center gap-5 border-l-4 border-accent-purple shadow-md">
+                                    <div className="p-4 bg-accent-purple/10 rounded-2xl">
+                                        <ClipboardList className="h-7 w-7 text-accent-purple" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Unidades Pendientes</p>
+                                        <h3 className="text-3xl font-black tracking-tight">
+                                            {Math.max(0, proceso.cantidadProducir - calculatedUnits).toLocaleString()}
+                                            <span className="text-xs text-gray-500 ml-2">por empacar</span>
+                                        </h3>
+                                    </div>
                                 </div>
                             </div>
-
-                            <div className="glass p-6 rounded-3xl flex items-center gap-5 border-l-4 border-accent-purple shadow-md">
-                                <div className="p-4 bg-accent-purple/10 rounded-2xl">
-                                    <ClipboardList className="h-7 w-7 text-accent-purple" />
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Unidades Pendientes</p>
-                                    <h3 className="text-3xl font-black tracking-tight">
-                                        {Math.max(0, proceso.cantidadProducir - calculatedUnits).toLocaleString()}
-                                        <span className="text-xs text-gray-500 ml-2">por empacar</span>
-                                    </h3>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                        )}
                     </div>
                 )}
             </main>
