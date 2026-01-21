@@ -3,7 +3,9 @@ export type UserRole = 'operador' | 'supervisor' | 'superadmin';
 export interface User {
     id: string;
     username: string;
+    email: string;
     rol: UserRole;
+    activo: boolean;
     creadoEn: string;
 }
 

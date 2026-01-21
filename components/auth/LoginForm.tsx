@@ -23,7 +23,13 @@ export default function LoginForm() {
             const { metadata } = await signIn(username, password);
 
             if (metadata) {
-                router.push('/procesos');
+                if (!metadata.activo) {
+                    setError('Su cuenta está pendiente de aprobación por un administrador.');
+                    // Opcional: Cerrar sesión en firebase para evitar que quede logueado
+                    // await import('@/lib/auth-service').then(m => m.logout()); 
+                } else {
+                    router.push('/procesos');
+                }
             } else {
                 setError('El usuario no tiene un rol asignado en el sistema.');
             }

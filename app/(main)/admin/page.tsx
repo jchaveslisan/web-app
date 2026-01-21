@@ -16,14 +16,15 @@ import {
 import { cn } from '@/lib/utils';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { ColaboradorMaestro, Justificacion, Etapa } from '@/types';
+import { ColaboradorMaestro, Justificacion, Etapa, User, UserRole } from '@/types';
 
 export default function AdminPage() {
-    const [tab, setTab] = useState<'personal' | 'pausa' | 'salida' | 'etapas'>('personal');
+    const [tab, setTab] = useState<'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios'>('personal');
     const [colaboradores, setColaboradores] = useState<ColaboradorMaestro[]>([]);
     const [justificacionesPausa, setJustificacionesPausa] = useState<Justificacion[]>([]);
     const [justificacionesSalida, setJustificacionesSalida] = useState<Justificacion[]>([]);
     const [etapas, setEtapas] = useState<Etapa[]>([]);
+    const [usuarios, setUsuarios] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [newNombre, setNewNombre] = useState('');
@@ -52,7 +53,7 @@ export default function AdminPage() {
                 .filter(d => d.data().tipo === 'pausa')
                 .map(doc => ({ id: doc.id, ...doc.data() } as Justificacion));
             setJustificacionesPausa(pausa);
-            
+
             const salida = snapshot.docs
                 .filter(d => d.data().tipo === 'salida')
                 .map(doc => ({ id: doc.id, ...doc.data() } as Justificacion));
@@ -67,6 +68,16 @@ export default function AdminPage() {
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Etapa));
             setEtapas(data);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Cargar usuarios
+    useEffect(() => {
+        const q = query(collection(db, 'usuarios'), orderBy('email', 'asc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+            setUsuarios(data);
         });
         return () => unsubscribe();
     }, []);
@@ -138,6 +149,22 @@ export default function AdminPage() {
         }
     };
 
+    const handleUpdateUserRole = async (uid: string, newRole: UserRole) => {
+        try {
+            await updateDoc(doc(db, 'usuarios', uid), { rol: newRole });
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    const handleToggleUserActive = async (uid: string, currentStatus: boolean) => {
+        try {
+            await updateDoc(doc(db, 'usuarios', uid), { activo: !currentStatus });
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-background text-white p-6 lg:p-10">
             <header className="flex items-center gap-4 mb-10">
@@ -198,6 +225,17 @@ export default function AdminPage() {
                     )}
                 >
                     Etapas
+                </button>
+                <button
+                    onClick={() => { setTab('usuarios'); setShowForm(false); }}
+                    className={cn(
+                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
+                        tab === 'usuarios'
+                            ? "border-emerald-400 text-emerald-400"
+                            : "border-transparent text-gray-400 hover:text-white"
+                    )}
+                >
+                    <Users className="h-5 w-5" /> Usuarios
                 </button>
             </div>
 
@@ -504,7 +542,62 @@ export default function AdminPage() {
                         </div>
                     </>
                 )}
+
+                {/* TAB: USUARIOS */}
+                {tab === 'usuarios' && (
+                    <>
+                        <div className="flex items-center justify-between mb-8">
+                            <h2 className="text-xl font-black uppercase tracking-widest text-emerald-400">Control de Usuarios</h2>
+                        </div>
+
+                        <div className="glass rounded-3xl overflow-hidden border border-white/10">
+                            <table className="w-full text-left">
+                                <thead>
+                                    <tr className="bg-white/5 border-b border-white/10">
+                                        <th className="p-5 text-xs font-black uppercase text-gray-500">Usuario</th>
+                                        <th className="p-5 text-xs font-black uppercase text-gray-500">Email</th>
+                                        <th className="p-5 text-xs font-black uppercase text-gray-500">Rol</th>
+                                        <th className="p-5 text-xs font-black uppercase text-gray-500">Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {usuarios.map((u) => (
+                                        <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
+                                            <td className="p-5 font-bold">{u.username || 'Sin nombre'}</td>
+                                            <td className="p-5 text-gray-400 font-mono text-sm">{u.email}</td>
+                                            <td className="p-5">
+                                                <select
+                                                    value={u.rol}
+                                                    onChange={(e) => handleUpdateUserRole(u.id, e.target.value as UserRole)}
+                                                    className="bg-black/20 border border-white/10 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-primary-blue outline-none"
+                                                >
+                                                    <option value="operador">Operador</option>
+                                                    <option value="supervisor">Supervisor</option>
+                                                    <option value="superadmin">Superadmin</option>
+                                                </select>
+                                            </td>
+                                            <td className="p-5">
+                                                <button
+                                                    onClick={() => handleToggleUserActive(u.id, u.activo)}
+                                                    className={cn(
+                                                        "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all",
+                                                        u.activo
+                                                            ? "bg-success-green/10 border-success-green/20 text-success-green hover:bg-success-green/20"
+                                                            : "bg-danger-red/10 border-danger-red/20 text-danger-red hover:bg-danger-red/20"
+                                                    )}
+                                                >
+                                                    {u.activo ? "ACTIVO" : "INACTIVO"}
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {usuarios.length === 0 && <div className="p-8 text-center text-gray-600">No hay usuarios registrados</div>}
+                        </div>
+                    </>
+                )}
             </div>
-        </div>
+        </div >
     );
 }

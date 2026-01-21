@@ -55,7 +55,7 @@ export default function ProcesosPage() {
                 collection(db, 'colaboradores_log'),
                 where('procesoId', '==', proceso.id)
             );
-            
+
             return onSnapshot(q, (snapshot) => {
                 const colabs = snapshot.docs.map(doc => doc.data());
                 setColaboradoresPorProceso(prev => ({
@@ -139,7 +139,7 @@ export default function ProcesosPage() {
             const colabs = colaboradoresPorProceso[proceso.id] || [];
             const activos = colabs.filter((c: any) => !c.horaSalida && c.tipo === 'colaborador');
             const numPersonas = activos.length;
-            
+
             // Calcular velocidad del equipo: velocidadTeorica * número de colaboradores
             velocidadEquipoMin = (velocidadTeorica || 0) * numPersonas;
             const unitsPerSec = velocidadEquipoMin / 60;
@@ -147,19 +147,19 @@ export default function ProcesosPage() {
             const now = new Date();
             const lastUpdate = (ultimoUpdate as any)?.toDate?.() || new Date(ultimoUpdate || Date.now());
             const elapsedSeconds = Math.max(0, differenceInSeconds(now, lastUpdate));
-            
+
             calculatedUnits = (trabajoCompletado || 0) + (unitsPerSec * elapsedSeconds);
         }
 
         // Unidades restantes basadas en calculatedUnits
         const unidadesRestantes = Math.max(0, cantidadProducir - calculatedUnits);
-        
+
         let segundosTotalesRestantes = 0;
 
         // Si tiene un tiempo guardado, usarlo como base
         if ((proceso as any).tiempoRestanteAlPausar !== null && (proceso as any).tiempoRestanteAlPausar !== undefined) {
             const tiempoGuardado = (proceso as any).tiempoRestanteAlPausar;
-            
+
             if (estado === 'Iniciado' && ultimoUpdate) {
                 // Reanudado: restar el tiempo transcurrido desde ultimoUpdate
                 const now = new Date();
@@ -204,7 +204,7 @@ export default function ProcesosPage() {
         const h = Math.floor(segundosTotalesRestantes / 3600);
         const m = Math.floor((segundosTotalesRestantes % 3600) / 60);
         const s = Math.floor(segundosTotalesRestantes % 60);
-        
+
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     };
 
@@ -278,6 +278,10 @@ export default function ProcesosPage() {
                         <Settings className="h-6 w-6 text-gray-400" />
                     </button>
                     <button
+                        onClick={async () => {
+                            await import('@/lib/auth-service').then(m => m.logout());
+                            router.push('/');
+                        }}
                         className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors border border-white/10"
                         title="Cerrar Sesión"
                     >
@@ -306,7 +310,7 @@ export default function ProcesosPage() {
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    <button 
+                    <button
                         onClick={() => setRefreshKey(prev => prev + 1)}
                         className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-6 py-3 rounded-xl font-semibold transition-all">
                         <RefreshCw className="h-5 w-5" />
@@ -385,8 +389,8 @@ export default function ProcesosPage() {
                                                     <td className="p-5 text-center">
                                                         <div className="flex flex-col items-center gap-1">
                                                             <span className="text-sm font-bold text-success-green">
-                                                                {proceso.utilizaTemporizador ? 
-                                                                    `${getUnidadesPendientes(proceso).toLocaleString('es-ES', { maximumFractionDigits: 1 })} / ${proceso.cantidadProducir}` 
+                                                                {proceso.utilizaTemporizador ?
+                                                                    `${getUnidadesPendientes(proceso).toLocaleString('es-ES', { maximumFractionDigits: 1 })} / ${proceso.cantidadProducir}`
                                                                     : 'N/A'
                                                                 }
                                                             </span>
@@ -415,9 +419,9 @@ export default function ProcesosPage() {
                                                             <span className={cn(
                                                                 "text-xs font-medium px-2 py-0.5 rounded-full",
                                                                 proceso.estado === 'Finalizado' ? 'bg-gray-700/30 text-gray-300' :
-                                                                proceso.estado === 'Pausado' ? 'bg-warning-yellow/20 text-warning-yellow' :
-                                                                proceso.estado === 'Iniciado' ? 'bg-success-green/20 text-success-green' :
-                                                                'bg-primary-blue/20 text-primary-blue'
+                                                                    proceso.estado === 'Pausado' ? 'bg-warning-yellow/20 text-warning-yellow' :
+                                                                        proceso.estado === 'Iniciado' ? 'bg-success-green/20 text-success-green' :
+                                                                            'bg-primary-blue/20 text-primary-blue'
                                                             )}>
                                                                 {proceso.estado}
                                                             </span>

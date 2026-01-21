@@ -5,7 +5,7 @@ import {
     User as FirebaseUser
 } from 'firebase/auth';
 import { auth } from './firebase';
-import { getUsuario } from './firebase-db';
+import { getUsuario, createUsuario } from './firebase-db';
 import { User } from '@/types';
 import { create } from 'zustand';
 
@@ -25,7 +25,21 @@ export const useAuthStore = create<AuthState>((set) => ({
 
 export const signIn = async (email: string, pass: string) => {
     const result = await signInWithEmailAndPassword(auth, email, pass);
-    const userMetadata = await getUsuario(result.user.uid);
+    let userMetadata = await getUsuario(result.user.uid);
+
+    if (!userMetadata) {
+        const newUser: User = {
+            id: result.user.uid,
+            username: result.user.displayName || email.split('@')[0],
+            email: email,
+            rol: 'operador',
+            activo: false,
+            creadoEn: new Date().toISOString()
+        };
+        await createUsuario(newUser);
+        userMetadata = newUser;
+    }
+
     return { auth: result.user, metadata: userMetadata };
 };
 

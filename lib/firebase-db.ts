@@ -45,6 +45,21 @@ export const getUsuario = async (uid: string): Promise<User | null> => {
     return docSnap.exists() ? (docSnap.data() as User) : null;
 };
 
+export const getAllUsuarios = async (): Promise<User[]> => {
+    const q = query(collection(db, 'usuarios'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+};
+
+export const updateUsuario = async (uid: string, data: Partial<User>) => {
+    const docRef = doc(db, 'usuarios', uid);
+    await updateDoc(docRef, data);
+};
+
+export const createUsuario = async (user: User) => {
+    await setDoc(doc(db, 'usuarios', user.id), user);
+};
+
 // --- PROCESOS ---
 export const subscribeProcesos = (callback: (procesos: Proceso[]) => void) => {
     const q = query(collection(db, 'procesos'), orderBy('modificadoEn', 'desc'));
@@ -204,7 +219,7 @@ export const executeBulkExit = async (
         let supervisorId = '';
         let supervisorPin_value = '';
         let supervisorData: any = null;
-        
+
         // Try finding by claveRegistro first
         const supervisorQuerySnap = await getDocs(
             query(
@@ -271,10 +286,10 @@ export const executeBulkExit = async (
         const esActivoEnProceso = colaboradoresEnProcesoSnap.docs.some(doc => {
             const data = doc.data();
             const colaboradorId = data.colaboradorId;
-            
+
             console.log(`   - Comparando: ${colaboradorId} === ${supervisorId} ? ${colaboradorId === supervisorId}`);
             console.log(`   - O por PIN: ${colaboradorId} === ${supervisorPin_value} ? ${colaboradorId === supervisorPin_value}`);
-            
+
             return colaboradorId === supervisorId || colaboradorId === supervisorPin_value;
         });
 
@@ -320,7 +335,7 @@ export const executeBulkExit = async (
                     where('colaboradorId', '==', supervisorPin_value)
                 )
             );
-            
+
             if (supervisorCollabSnap.docs.length > 0) {
                 console.log(`✅ FALLBACK AUTORIZADO: PIN existe como participante activo en otros procesos`);
                 esAutorizado = true;
