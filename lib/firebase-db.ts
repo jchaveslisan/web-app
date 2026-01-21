@@ -36,6 +36,7 @@ export {
     writeBatch
 };
 import { db } from './firebase';
+export { db };
 import { Proceso, ColaboradorLog, EventoLog, User, ColaboradorMaestro, Justificacion, Etapa } from '@/types';
 
 // --- USUARIOS ---

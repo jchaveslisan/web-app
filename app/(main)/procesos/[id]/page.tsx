@@ -527,14 +527,14 @@ export default function MonitoreoPage() {
 
                                         {/* Orden de Producción y Lote - lado a lado */}
                                         <div className="grid grid-cols-2 gap-4">
-                                            <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                                                <p className="text-[10px] font-black text-gray-500 uppercase">Orden de Producción</p>
-                                                <p className="text-lg font-mono font-black text-white">{proceso.ordenProduccion}</p>
+                                            <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
+                                                <p className="text-xs font-black text-gray-500 uppercase mb-1">Orden de Producción</p>
+                                                <p className="text-3xl font-mono font-black text-white">{proceso.ordenProduccion}</p>
                                             </div>
 
-                                            <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                                                <p className="text-[10px] font-black text-gray-500 uppercase">Lote</p>
-                                                <p className="text-lg font-black text-white uppercase">{proceso.lote}</p>
+                                            <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
+                                                <p className="text-xs font-black text-gray-500 uppercase mb-1">Lote</p>
+                                                <p className="text-3xl font-black text-white uppercase">{proceso.lote}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -765,14 +765,20 @@ export default function MonitoreoPage() {
                                 )}
 
                                 {/* Orden / Lote / Etapa Grid */}
-                                <div className="grid grid-cols-1 gap-3">
-                                    <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                                        <p className="text-[10px] font-black text-gray-500 uppercase">Orden de Producción</p>
-                                        <p className="text-lg font-mono font-black text-white">{proceso.ordenProduccion}</p>
+                                <div className="grid grid-cols-1 gap-4">
+                                    <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
+                                        <p className="text-xs font-black text-gray-500 uppercase mb-1">Orden de Producción</p>
+                                        <p className="text-4xl font-mono font-black text-white">{proceso.ordenProduccion}</p>
                                     </div>
-                                    <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                                        <p className="text-[10px] font-black text-gray-500 uppercase">Lote / Etapa</p>
-                                        <p className="text-lg font-black text-white uppercase">{proceso.lote} / {proceso.etapa}</p>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
+                                            <p className="text-xs font-black text-gray-500 uppercase mb-1">Lote</p>
+                                            <p className="text-3xl font-black text-white uppercase">{proceso.lote}</p>
+                                        </div>
+                                        <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
+                                            <p className="text-xs font-black text-gray-500 uppercase mb-1">Etapa</p>
+                                            <p className="text-3xl font-black text-white uppercase">{proceso.etapa}</p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

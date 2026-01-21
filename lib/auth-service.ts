@@ -5,7 +5,7 @@ import {
     User as FirebaseUser
 } from 'firebase/auth';
 import { auth } from './firebase';
-import { getUsuario, createUsuario } from './firebase-db';
+import { getUsuario, createUsuario, db, collection, getDocs, query, limit } from './firebase-db';
 import { User } from '@/types';
 import { create } from 'zustand';
 
@@ -28,12 +28,16 @@ export const signIn = async (email: string, pass: string) => {
     let userMetadata = await getUsuario(result.user.uid);
 
     if (!userMetadata) {
+        // Verificar si es el primer usuario del sistema
+        const usuariosSnapshot = await getDocs(query(collection(db, 'usuarios'), limit(1)));
+        const isFirstUser = usuariosSnapshot.empty;
+
         const newUser: User = {
             id: result.user.uid,
             username: result.user.displayName || email.split('@')[0],
             email: email,
-            rol: 'operador',
-            activo: false,
+            rol: isFirstUser ? 'superadmin' : 'operador',
+            activo: isFirstUser ? true : false,
             creadoEn: new Date().toISOString()
         };
         await createUsuario(newUser);
