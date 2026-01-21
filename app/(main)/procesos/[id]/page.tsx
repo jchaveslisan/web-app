@@ -439,7 +439,7 @@ export default function MonitoreoPage() {
         <div className="min-h-screen bg-background text-white flex flex-col">
             {/* Header Compacto */}
             <header className="border-b border-white/10 bg-black/50 backdrop-blur-md p-4 flex items-center justify-between sticky top-0 z-50">
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-4">
                     <button
                         onClick={() => router.push('/procesos')}
                         className="p-2 hover:bg-white/10 rounded-lg transition-colors border border-white/5 bg-white/5"
@@ -447,10 +447,10 @@ export default function MonitoreoPage() {
                         <ArrowLeft className="h-6 w-6" />
                     </button>
                     <div>
-                        <h1 className="text-xl font-black tracking-tight flex items-center gap-3">
-                            <span className="text-primary-blue">MÓDULO DE MONITOREO</span>
-                            <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
-                            <span className="text-gray-400 font-mono text-sm">{proceso.ordenProduccion}</span>
+                        <h1 className="text-lg md:text-xl font-black tracking-tight flex flex-wrap items-center gap-2 md:gap-3">
+                            <span className="text-primary-blue">MONITOREO</span>
+                            <span className="hidden md:block w-1.5 h-1.5 rounded-full bg-white/20" />
+                            <span className="text-gray-400 font-mono text-xs md:text-sm">{proceso.ordenProduccion}</span>
                         </h1>
                     </div>
                 </div>
@@ -522,19 +522,19 @@ export default function MonitoreoPage() {
                                         {/* Producto */}
                                         <div className="space-y-1">
                                             <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Producto en proceso</p>
-                                            <h4 className="text-2xl font-black text-white leading-tight uppercase line-clamp-2">{proceso.producto}</h4>
+                                            <h4 className="text-xl md:text-2xl font-black text-white leading-tight uppercase line-clamp-3">{proceso.producto}</h4>
                                         </div>
 
                                         {/* Orden de Producción y Lote - lado a lado */}
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div className="bg-white/5 p-4 md:p-5 rounded-2xl border border-white/5">
                                                 <p className="text-xs font-black text-gray-500 uppercase mb-1">Orden de Producción</p>
-                                                <p className="text-3xl font-mono font-black text-white">{proceso.ordenProduccion}</p>
+                                                <p className="text-2xl md:text-3xl font-mono font-black text-white break-all">{proceso.ordenProduccion}</p>
                                             </div>
 
-                                            <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
+                                            <div className="bg-white/5 p-4 md:p-5 rounded-2xl border border-white/5">
                                                 <p className="text-xs font-black text-gray-500 uppercase mb-1">Lote</p>
-                                                <p className="text-3xl font-black text-white uppercase">{proceso.lote}</p>
+                                                <p className="text-2xl md:text-3xl font-black text-white uppercase break-all">{proceso.lote}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -589,8 +589,8 @@ export default function MonitoreoPage() {
                                 </p>
 
                                 <h2 className={cn(
-                                    "font-black tracking-tighter leading-none transition-colors duration-500 tabular-nums select-none",
-                                    stats.tiempoRestanteStr === "PERSONAL REQUERIDO" ? "text-6xl md:text-7xl lg:text-8xl" : "text-[12rem] xl:text-[14rem]",
+                                    "font-black tracking-tighter leading-none transition-colors duration-500 tabular-nums select-none text-center",
+                                    stats.tiempoRestanteStr === "PERSONAL REQUERIDO" ? "text-4xl sm:text-6xl md:text-7xl lg:text-8xl" : "text-7xl sm:text-9xl md:text-[10rem] lg:text-[12rem] xl:text-[14rem]",
                                     (proceso.estado === 'Iniciado' || proceso.setupEstado === 'en curso') ? "text-white" : "text-gray-600",
                                     stats.isGracePeriod && "text-warning-yellow",
                                     stats.isTiempoExtra && "text-danger-red animate-pulse"
@@ -600,30 +600,30 @@ export default function MonitoreoPage() {
                             </>
                         )}
 
-                        <div className="mt-12 flex flex-wrap justify-center gap-6">
+                        <div className="mt-8 md:mt-12 flex flex-col sm:flex-row flex-wrap justify-center gap-4 md:gap-6 w-full px-4">
                             {/* Setup Buttons */}
                             {proceso.contabilizaSetup && proceso.setupEstado !== 'finalizado' && proceso.estado !== 'Finalizado' && (
                                 <>
                                     {proceso.setupEstado !== 'en curso' ? (
                                         <button
                                             onClick={() => handleSetupAction('start')}
-                                            className="px-12 py-5 bg-orange-500 text-black rounded-3xl font-black text-xl flex items-center gap-4 transition-all transform hover:scale-105 shadow-xl shadow-orange-500/20"
+                                            className="w-full sm:w-auto px-8 md:px-12 py-4 md:py-5 bg-orange-500 text-black rounded-3xl font-black text-lg md:text-xl flex items-center justify-center gap-4 transition-all transform hover:scale-105 shadow-xl shadow-orange-500/20"
                                         >
-                                            <Play className="h-7 w-7 fill-current" /> {proceso.setupEstado === 'pausado' ? 'REANUDAR SETUP' : 'INICIAR SETUP'}
+                                            <Play className="h-6 w-6 md:h-7 md:w-7 fill-current" /> {proceso.setupEstado === 'pausado' ? 'REANUDAR' : 'INICIAR SETUP'}
                                         </button>
                                     ) : (
                                         <button
                                             onClick={() => handleSetupAction('pause')}
-                                            className="px-12 py-5 bg-yellow-500 text-black rounded-3xl font-black text-xl flex items-center gap-4 transition-all transform hover:scale-105 shadow-xl shadow-yellow-500/20"
+                                            className="w-full sm:w-auto px-8 md:px-12 py-4 md:py-5 bg-yellow-500 text-black rounded-3xl font-black text-lg md:text-xl flex items-center justify-center gap-4 transition-all transform hover:scale-105 shadow-xl shadow-yellow-500/20"
                                         >
-                                            <Pause className="h-7 w-7 fill-current" /> PAUSAR SETUP
+                                            <Pause className="h-6 w-6 md:h-7 md:w-7 fill-current" /> PAUSAR SETUP
                                         </button>
                                     )}
                                     <button
                                         onClick={() => handleSetupAction('finish')}
-                                        className="px-12 py-5 bg-blue-500 text-white rounded-3xl font-black text-xl flex items-center gap-4 transition-all transform hover:scale-105 shadow-xl shadow-blue-500/20"
+                                        className="w-full sm:w-auto px-8 md:px-12 py-4 md:py-5 bg-blue-500 text-white rounded-3xl font-black text-lg md:text-xl flex items-center justify-center gap-4 transition-all transform hover:scale-105 shadow-xl shadow-blue-500/20"
                                     >
-                                        <Check className="h-7 w-7" /> FINALIZAR SETUP
+                                        <Check className="h-6 w-6 md:h-7 md:w-7" /> FINALIZAR SETUP
                                     </button>
                                 </>
                             )}
@@ -643,24 +643,24 @@ export default function MonitoreoPage() {
                                             <button
                                                 onClick={handleToggleEstado}
                                                 className={cn(
-                                                    "px-12 py-5 rounded-3xl font-black text-xl flex items-center gap-4 transition-all transform hover:scale-105 shadow-xl",
+                                                    "w-full sm:w-auto px-8 md:px-12 py-4 md:py-5 rounded-3xl font-black text-lg md:text-xl flex items-center justify-center gap-4 transition-all transform hover:scale-105 shadow-xl",
                                                     (proceso.estado === 'Pausado' || proceso.estado === 'Registrado') ? "bg-success-green text-black hover:bg-green-600 shadow-success-green/20" : "bg-warning-yellow text-black hover:bg-yellow-600 shadow-warning-yellow/20"
                                                 )}
                                             >
                                                 {(proceso.estado === 'Pausado' || proceso.estado === 'Registrado') ? (
                                                     <><Play className="h-7 w-7 fill-current" /> {proceso.estado === 'Registrado' ? 'INICIAR PRODUCCIÓN' : 'REANUDAR'}</>
                                                 ) : (
-                                                    <><Pause className="h-7 w-7 fill-current" /> PAUSAR</>
+                                                    <><Pause className="h-6 w-6 md:h-7 md:w-7 fill-current" /> PAUSAR</>
                                                 )}
                                             </button>
                                         )
                                     )}
                                     {proceso.estado !== 'Finalizado' && (
                                         <button
-                                            className="bg-danger-red/10 hover:bg-danger-red text-danger-red border border-danger-red/20 px-12 py-5 rounded-3xl font-black text-xl flex items-center gap-4 transition-all"
+                                            className="w-full sm:w-auto bg-danger-red/10 hover:bg-danger-red text-danger-red border border-danger-red/20 px-8 md:px-12 py-4 md:py-5 rounded-3xl font-black text-lg md:text-xl flex items-center justify-center gap-4 transition-all"
                                             onClick={handleFinalizarProceso}
                                         >
-                                            <Square className="h-7 w-7 fill-current" /> TERMINAR PROCESO
+                                            <Square className="h-6 w-6 md:h-7 md:w-7 fill-current" /> TERMINAR
                                         </button>
                                     )}
                                 </>
@@ -732,305 +732,319 @@ export default function MonitoreoPage() {
 
                         </div>
                     </div>
-                </div>
+                </div >
 
                 {/* Right Column: Metrics & Production Data - Solo si usa temporizador */}
-                {proceso.utilizaTemporizador && (
-                    <div className="col-span-12 lg:col-span-4 flex flex-col gap-6 overflow-auto pr-1">
+                {
+                    proceso.utilizaTemporizador && (
+                        <div className="col-span-12 lg:col-span-4 flex flex-col gap-6 overflow-auto pr-1">
 
 
-                        {/* PRODUCTION DATA (SIDEBAR) */}
-                        <div className="glass rounded-[2.5rem] p-8 bg-gradient-to-br from-white/[0.05] to-transparent border-white/5">
-                            <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
-                                <ClipboardList className="h-6 w-6 text-accent-purple" />
-                                <h3 className="text-lg font-black tracking-widest uppercase">Información del Proceso</h3>
-                            </div>
-
-                            <div className="space-y-6">
-                                {/* Producto */}
-                                <div className="space-y-1">
-                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Producto en proceso</p>
-                                    <h4 className="text-2xl font-black text-white leading-tight uppercase line-clamp-2">{proceso.producto}</h4>
+                            {/* PRODUCTION DATA (SIDEBAR) */}
+                            <div className="glass rounded-[2.5rem] p-8 bg-gradient-to-br from-white/[0.05] to-transparent border-white/5">
+                                <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
+                                    <ClipboardList className="h-6 w-6 text-accent-purple" />
+                                    <h3 className="text-lg font-black tracking-widest uppercase">Información del Proceso</h3>
                                 </div>
 
-                                {/* Líder de Línea - Solo para procesos con temporizador */}
-                                {proceso.utilizaTemporizador && (
-                                    <div className="space-y-1 bg-primary-blue/10 p-5 rounded-2xl border border-primary-blue/10">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <Users className="h-4 w-4 text-primary-blue" />
-                                            <p className="text-[10px] font-black text-primary-blue uppercase tracking-widest">Líder de Línea</p>
-                                        </div>
-                                        <h4 className="text-xl font-black text-white uppercase truncate">{proceso.lider}</h4>
+                                <div className="space-y-6">
+                                    {/* Producto */}
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Producto en proceso</p>
+                                        <h4 className="text-2xl font-black text-white leading-tight uppercase line-clamp-2">{proceso.producto}</h4>
                                     </div>
-                                )}
 
-                                {/* Orden / Lote / Etapa Grid */}
-                                <div className="grid grid-cols-1 gap-4">
-                                    <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
-                                        <p className="text-xs font-black text-gray-500 uppercase mb-1">Orden de Producción</p>
-                                        <p className="text-4xl font-mono font-black text-white">{proceso.ordenProduccion}</p>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
-                                            <p className="text-xs font-black text-gray-500 uppercase mb-1">Lote</p>
-                                            <p className="text-3xl font-black text-white uppercase">{proceso.lote}</p>
+                                    {/* Líder de Línea - Solo para procesos con temporizador */}
+                                    {proceso.utilizaTemporizador && (
+                                        <div className="space-y-1 bg-primary-blue/10 p-5 rounded-2xl border border-primary-blue/10">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <Users className="h-4 w-4 text-primary-blue" />
+                                                <p className="text-[10px] font-black text-primary-blue uppercase tracking-widest">Líder de Línea</p>
+                                            </div>
+                                            <h4 className="text-xl font-black text-white uppercase truncate">{proceso.lider}</h4>
                                         </div>
-                                        <div className="bg-white/5 p-5 rounded-2xl border border-white/5">
-                                            <p className="text-xs font-black text-gray-500 uppercase mb-1">Etapa</p>
-                                            <p className="text-3xl font-black text-white uppercase">{proceso.etapa}</p>
+                                    )}
+
+                                    {/* Orden / Lote / Etapa Grid */}
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <div className="bg-white/5 p-4 md:p-5 rounded-2xl border border-white/5">
+                                            <p className="text-xs font-black text-gray-500 uppercase mb-1">Orden de Producción</p>
+                                            <p className="text-2xl md:text-4xl font-mono font-black text-white break-all">{proceso.ordenProduccion}</p>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div className="bg-white/5 p-4 md:p-5 rounded-2xl border border-white/5">
+                                                <p className="text-xs font-black text-gray-500 uppercase mb-1">Lote</p>
+                                                <p className="text-2xl md:text-3xl font-black text-white uppercase break-all">{proceso.lote}</p>
+                                            </div>
+                                            <div className="bg-white/5 p-4 md:p-5 rounded-2xl border border-white/5">
+                                                <p className="text-xs font-black text-gray-500 uppercase mb-1">Etapa</p>
+                                                <p className="text-2xl md:text-3xl font-black text-white uppercase">{proceso.etapa}</p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
+
+                            {/* METRICS (SIDEBAR) - Solo para procesos con temporizador */}
+                            {proceso.utilizaTemporizador && (
+                                <div className="space-y-4">
+                                    <div className="glass p-6 rounded-3xl flex items-center gap-5 border-l-4 border-primary-blue shadow-md">
+                                        <div className="p-4 bg-primary-blue/10 rounded-2xl">
+                                            <Activity className="h-7 w-7 text-primary-blue" />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Velocidad Equipo</p>
+                                            <h3 className="text-3xl font-black tracking-tight">{stats.velocidadActual} <span className="text-xs text-gray-500">est/min</span></h3>
+                                        </div>
+                                    </div>
+
+                                    <div className="glass p-6 rounded-3xl flex items-center gap-5 border-l-4 border-accent-purple shadow-md">
+                                        <div className="p-4 bg-accent-purple/10 rounded-2xl">
+                                            <ClipboardList className="h-7 w-7 text-accent-purple" />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Unidades Pendientes</p>
+                                            <h3 className="text-3xl font-black tracking-tight">
+                                                {Math.max(0, proceso.cantidadProducir - calculatedUnits).toLocaleString()}
+                                                <span className="text-xs text-gray-500 ml-2">por empacar</span>
+                                            </h3>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
-
-                        {/* METRICS (SIDEBAR) - Solo para procesos con temporizador */}
-                        {proceso.utilizaTemporizador && (
-                            <div className="space-y-4">
-                                <div className="glass p-6 rounded-3xl flex items-center gap-5 border-l-4 border-primary-blue shadow-md">
-                                    <div className="p-4 bg-primary-blue/10 rounded-2xl">
-                                        <Activity className="h-7 w-7 text-primary-blue" />
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Velocidad Equipo</p>
-                                        <h3 className="text-3xl font-black tracking-tight">{stats.velocidadActual} <span className="text-xs text-gray-500">est/min</span></h3>
-                                    </div>
-                                </div>
-
-                                <div className="glass p-6 rounded-3xl flex items-center gap-5 border-l-4 border-accent-purple shadow-md">
-                                    <div className="p-4 bg-accent-purple/10 rounded-2xl">
-                                        <ClipboardList className="h-7 w-7 text-accent-purple" />
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Unidades Pendientes</p>
-                                        <h3 className="text-3xl font-black tracking-tight">
-                                            {Math.max(0, proceso.cantidadProducir - calculatedUnits).toLocaleString()}
-                                            <span className="text-xs text-gray-500 ml-2">por empacar</span>
-                                        </h3>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </main>
+                    )
+                }
+            </main >
 
 
-            {modalJustificacion.show && (
-                <ModalJustificacion
-                    tipo={modalJustificacion.tipo}
-                    onConfirm={handleConfirmJustificacion}
-                    onCancel={() => {
-                        setModalJustificacion({ ...modalJustificacion, show: false });
-                        setPendingExitLog(null);
-                    }}
-                />
-            )}
+            {
+                modalJustificacion.show && (
+                    <ModalJustificacion
+                        tipo={modalJustificacion.tipo}
+                        onConfirm={handleConfirmJustificacion}
+                        onCancel={() => {
+                            setModalJustificacion({ ...modalJustificacion, show: false });
+                            setPendingExitLog(null);
+                        }}
+                    />
+                )
+            }
 
-            {showModalBulkExit && (
-                <ModalBulkExit
-                    procesoId={id}
-                    userId={(user as any)?.uid}
-                    onClose={() => setShowModalBulkExit(false)}
-                    onSuccess={(exitCount) => {
-                        setStaffMessage({
-                            text: `✅ ${exitCount} salida(s) registrada(s)`,
-                            type: 'success'
-                        });
-                        setTimeout(() => setStaffMessage(null), 4000);
-                    }}
-                />
-            )}
+            {
+                showModalBulkExit && (
+                    <ModalBulkExit
+                        procesoId={id}
+                        userId={(user as any)?.uid}
+                        onClose={() => setShowModalBulkExit(false)}
+                        onSuccess={(exitCount) => {
+                            setStaffMessage({
+                                text: `✅ ${exitCount} salida(s) registrada(s)`,
+                                type: 'success'
+                            });
+                            setTimeout(() => setStaffMessage(null), 4000);
+                        }}
+                    />
+                )
+            }
 
             {/* MODAL TIPO DE PERSONAL (INGRESO) */}
-            {showStaffTypeModal && pendingStaffMaestro && (
-                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
-                    <div className="glass w-full max-w-lg rounded-[3rem] overflow-hidden border-white/10 shadow-2xl flex flex-col items-center p-12 gap-8 text-center animate-in zoom-in duration-300">
-                        <div className="p-6 bg-primary-blue/20 rounded-full">
-                            <UserPlus className="h-12 w-12 text-primary-blue" />
-                        </div>
-                        <div>
-                            <h3 className="text-3xl font-black mb-2 uppercase tracking-tight">{pendingStaffMaestro.nombreCompleto}</h3>
-                            <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Seleccione el tipo de ingreso para este proceso</p>
-                        </div>
+            {
+                showStaffTypeModal && pendingStaffMaestro && (
+                    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
+                        <div className="glass w-full max-w-lg rounded-[3rem] overflow-hidden border-white/10 shadow-2xl flex flex-col items-center p-12 gap-8 text-center animate-in zoom-in duration-300">
+                            <div className="p-6 bg-primary-blue/20 rounded-full">
+                                <UserPlus className="h-12 w-12 text-primary-blue" />
+                            </div>
+                            <div>
+                                <h3 className="text-3xl font-black mb-2 uppercase tracking-tight">{pendingStaffMaestro.nombreCompleto}</h3>
+                                <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Seleccione el tipo de ingreso para este proceso</p>
+                            </div>
 
-                        <div className="grid grid-cols-1 w-full gap-4">
+                            <div className="grid grid-cols-1 w-full gap-4">
+                                <button
+                                    onClick={() => handleConfirmStaffEntry('colaborador')}
+                                    className="group relative flex items-center justify-between p-6 bg-white/5 hover:bg-success-green hover:text-black rounded-3xl border border-white/10 transition-all text-left"
+                                >
+                                    <div>
+                                        <p className="text-xl font-black uppercase">Colaborador</p>
+                                        <p className="text-[10px] opacity-60 font-bold uppercase tracking-widest mt-1">Personal base de la línea</p>
+                                    </div>
+                                    <Activity className="h-6 w-6 opacity-40 group-hover:opacity-100" />
+                                </button>
+
+                                <button
+                                    onClick={() => handleConfirmStaffEntry('apoyo')}
+                                    className="group relative flex items-center justify-between p-6 bg-white/5 hover:bg-primary-blue hover:text-white rounded-3xl border border-white/10 transition-all text-left"
+                                >
+                                    <div>
+                                        <p className="text-xl font-black uppercase">Apoyo</p>
+                                        <p className="text-[10px] opacity-60 font-bold uppercase tracking-widest mt-1">Personal de refuerzo temporal</p>
+                                    </div>
+                                    <Users className="h-6 w-6 opacity-40 group-hover:opacity-100" />
+                                </button>
+                            </div>
+
                             <button
-                                onClick={() => handleConfirmStaffEntry('colaborador')}
-                                className="group relative flex items-center justify-between p-6 bg-white/5 hover:bg-success-green hover:text-black rounded-3xl border border-white/10 transition-all text-left"
+                                onClick={() => {
+                                    setShowStaffTypeModal(false);
+                                    setPendingStaffMaestro(null);
+                                }}
+                                className="text-gray-500 font-black text-[10px] uppercase tracking-[0.3em] hover:text-white transition-colors"
                             >
-                                <div>
-                                    <p className="text-xl font-black uppercase">Colaborador</p>
-                                    <p className="text-[10px] opacity-60 font-bold uppercase tracking-widest mt-1">Personal base de la línea</p>
-                                </div>
-                                <Activity className="h-6 w-6 opacity-40 group-hover:opacity-100" />
-                            </button>
-
-                            <button
-                                onClick={() => handleConfirmStaffEntry('apoyo')}
-                                className="group relative flex items-center justify-between p-6 bg-white/5 hover:bg-primary-blue hover:text-white rounded-3xl border border-white/10 transition-all text-left"
-                            >
-                                <div>
-                                    <p className="text-xl font-black uppercase">Apoyo</p>
-                                    <p className="text-[10px] opacity-60 font-bold uppercase tracking-widest mt-1">Personal de refuerzo temporal</p>
-                                </div>
-                                <Users className="h-6 w-6 opacity-40 group-hover:opacity-100" />
+                                Cancelar registro
                             </button>
                         </div>
-
-                        <button
-                            onClick={() => {
-                                setShowStaffTypeModal(false);
-                                setPendingStaffMaestro(null);
-                            }}
-                            className="text-gray-500 font-black text-[10px] uppercase tracking-[0.3em] hover:text-white transition-colors"
-                        >
-                            Cancelar registro
-                        </button>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* MODAL DE PERSONAL */}
-            {showStaffModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-                    <div className="glass w-full max-w-2xl rounded-[2.5rem] overflow-hidden flex flex-col max-h-[85vh] border-white/10 shadow-2xl">
-                        <div className="p-8 border-b border-white/10 flex items-center justify-between bg-white/5">
-                            <h3 className="text-2xl font-black flex items-center gap-3">
-                                <Users className="h-7 w-7 text-primary-blue" /> PERSONAL EN LINEA
-                            </h3>
-                            <button onClick={() => setShowStaffModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-                                <X className="h-7 w-7" />
-                            </button>
-                        </div>
-                        <div className="p-8 overflow-auto flex-1 space-y-4">
-                            <div className="flex justify-between items-center mb-4">
-                                <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">Colaboradores cargados en el proceso</p>
+            {
+                showStaffModal && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+                        <div className="glass w-full max-w-2xl rounded-[2.5rem] overflow-hidden flex flex-col max-h-[85vh] border-white/10 shadow-2xl">
+                            <div className="p-8 border-b border-white/10 flex items-center justify-between bg-white/5">
+                                <h3 className="text-2xl font-black flex items-center gap-3">
+                                    <Users className="h-7 w-7 text-primary-blue" /> PERSONAL EN LINEA
+                                </h3>
+                                <button onClick={() => setShowStaffModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                                    <X className="h-7 w-7" />
+                                </button>
                             </div>
-                            <div className="grid grid-cols-1 gap-3">
-                                {colaboradores.map((colab) => (
-                                    <div key={colab.id} className="flex items-center justify-between p-5 bg-white/5 rounded-3xl border border-white/5 group hover:border-white/20 transition-all">
-                                        <div className="flex items-center gap-5">
-                                            <div className="w-12 h-12 bg-primary-blue/20 rounded-2xl flex items-center justify-center font-black text-sm text-primary-blue">
-                                                {colab.nombre.substring(0, 2).toUpperCase()}
-                                            </div>
-                                            <div>
-                                                <p className="font-black text-lg uppercase">{colab.nombre}</p>
-                                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">
-                                                    ID: {colab.colaboradorId} | Tipo: {colab.tipo}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-8">
-                                            {colab.horaSalida ? (
-                                                <div className="text-right">
-                                                    <p className="text-[10px] font-black text-gray-500 uppercase">Salida registrada</p>
-                                                    <p className="font-mono text-sm text-gray-400">
-                                                        {format((colab.horaSalida as any).toDate(), 'HH:mm:ss')}
+                            <div className="p-8 overflow-auto flex-1 space-y-4">
+                                <div className="flex justify-between items-center mb-4">
+                                    <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">Colaboradores cargados en el proceso</p>
+                                </div>
+                                <div className="grid grid-cols-1 gap-3">
+                                    {colaboradores.map((colab) => (
+                                        <div key={colab.id} className="flex items-center justify-between p-5 bg-white/5 rounded-3xl border border-white/5 group hover:border-white/20 transition-all">
+                                            <div className="flex items-center gap-5">
+                                                <div className="w-12 h-12 bg-primary-blue/20 rounded-2xl flex items-center justify-center font-black text-sm text-primary-blue">
+                                                    {colab.nombre.substring(0, 2).toUpperCase()}
+                                                </div>
+                                                <div>
+                                                    <p className="font-black text-lg uppercase">{colab.nombre}</p>
+                                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">
+                                                        ID: {colab.colaboradorId} | Tipo: {colab.tipo}
                                                     </p>
                                                 </div>
-                                            ) : (
-                                                <div className="text-right">
-                                                    <p className="text-[10px] font-black text-gray-500 uppercase">Estado</p>
-                                                    <p className="font-mono text-sm text-success-green font-bold animate-pulse">EN LINEA</p>
-                                                </div>
-                                            )}
-                                            {!colab.horaSalida && proceso.estado !== 'Finalizado' && (
-                                                <button
-                                                    onClick={() => handleSalidaColaborador(colab.id, colab.nombre)}
-                                                    className="p-3 bg-danger-red/10 text-danger-red rounded-xl hover:bg-danger-red hover:text-white transition-all"
-                                                    title="Registrar Salida"
-                                                >
-                                                    <LogOut className="h-5 w-5" />
-                                                </button>
-                                            )}
+                                            </div>
+                                            <div className="flex items-center gap-8">
+                                                {colab.horaSalida ? (
+                                                    <div className="text-right">
+                                                        <p className="text-[10px] font-black text-gray-500 uppercase">Salida registrada</p>
+                                                        <p className="font-mono text-sm text-gray-400">
+                                                            {format((colab.horaSalida as any).toDate(), 'HH:mm:ss')}
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-right">
+                                                        <p className="text-[10px] font-black text-gray-500 uppercase">Estado</p>
+                                                        <p className="font-mono text-sm text-success-green font-bold animate-pulse">EN LINEA</p>
+                                                    </div>
+                                                )}
+                                                {!colab.horaSalida && proceso.estado !== 'Finalizado' && (
+                                                    <button
+                                                        onClick={() => handleSalidaColaborador(colab.id, colab.nombre)}
+                                                        className="p-3 bg-danger-red/10 text-danger-red rounded-xl hover:bg-danger-red hover:text-white transition-all"
+                                                        title="Registrar Salida"
+                                                    >
+                                                        <LogOut className="h-5 w-5" />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* MODAL DE EVENTOS */}
+            {
+                showEventsModal && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+                        <div className="glass w-full max-w-2xl rounded-[2.5rem] overflow-hidden flex flex-col max-h-[85vh] border-white/10 shadow-2xl">
+                            <div className="p-8 border-b border-white/10 flex items-center justify-between bg-white/5">
+                                <h3 className="text-2xl font-black flex items-center gap-3">
+                                    <History className="h-7 w-7 text-primary-blue" /> HISTORIAL DE EVENTOS
+                                </h3>
+                                <button onClick={() => setShowEventsModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                                    <X className="h-7 w-7" />
+                                </button>
+                            </div>
+                            <div className="p-8 overflow-auto flex-1 space-y-6">
+                                {eventos.map((ev) => (
+                                    <div key={ev.id} className="relative pl-8 border-l-2 border-primary-blue/30 pb-6 last:pb-0">
+                                        <div className="absolute top-0 -left-[9px] h-4 w-4 rounded-full bg-primary-blue border-4 border-black" />
+                                        <div className="flex justify-between items-start mb-2">
+                                            <p className="text-xs font-black text-primary-blue uppercase tracking-widest">
+                                                {ev.horaEvento ? format((ev.horaEvento as any).toDate(), 'HH:mm:ss') : 'Reciente'}
+                                            </p>
+                                            <span className="text-[10px] font-bold text-gray-500 bg-white/5 px-2 py-1 rounded-lg">
+                                                {ev.clasificacion}
+                                            </span>
+                                        </div>
+                                        <p className="text-lg font-black text-gray-100 mb-1">{ev.evento}</p>
+                                        {ev.justificacion && (
+                                            <div className="bg-white/5 p-4 rounded-2xl border border-white/5 mt-3">
+                                                <p className="text-sm text-gray-400 italic font-medium leading-relaxed">"{ev.justificacion}"</p>
+                                            </div>
+                                        )}
+                                        <p className="text-[10px] text-gray-600 font-bold mt-4 uppercase tracking-tighter">Registrado por: {ev.registradoPorUsuario}</p>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
-
-            {/* MODAL DE EVENTOS */}
-            {showEventsModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-                    <div className="glass w-full max-w-2xl rounded-[2.5rem] overflow-hidden flex flex-col max-h-[85vh] border-white/10 shadow-2xl">
-                        <div className="p-8 border-b border-white/10 flex items-center justify-between bg-white/5">
-                            <h3 className="text-2xl font-black flex items-center gap-3">
-                                <History className="h-7 w-7 text-primary-blue" /> HISTORIAL DE EVENTOS
-                            </h3>
-                            <button onClick={() => setShowEventsModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-                                <X className="h-7 w-7" />
-                            </button>
-                        </div>
-                        <div className="p-8 overflow-auto flex-1 space-y-6">
-                            {eventos.map((ev) => (
-                                <div key={ev.id} className="relative pl-8 border-l-2 border-primary-blue/30 pb-6 last:pb-0">
-                                    <div className="absolute top-0 -left-[9px] h-4 w-4 rounded-full bg-primary-blue border-4 border-black" />
-                                    <div className="flex justify-between items-start mb-2">
-                                        <p className="text-xs font-black text-primary-blue uppercase tracking-widest">
-                                            {ev.horaEvento ? format((ev.horaEvento as any).toDate(), 'HH:mm:ss') : 'Reciente'}
-                                        </p>
-                                        <span className="text-[10px] font-bold text-gray-500 bg-white/5 px-2 py-1 rounded-lg">
-                                            {ev.clasificacion}
-                                        </span>
-                                    </div>
-                                    <p className="text-lg font-black text-gray-100 mb-1">{ev.evento}</p>
-                                    {ev.justificacion && (
-                                        <div className="bg-white/5 p-4 rounded-2xl border border-white/5 mt-3">
-                                            <p className="text-sm text-gray-400 italic font-medium leading-relaxed">"{ev.justificacion}"</p>
-                                        </div>
-                                    )}
-                                    <p className="text-[10px] text-gray-600 font-bold mt-4 uppercase tracking-tighter">Registrado por: {ev.registradoPorUsuario}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
+                )
+            }
 
             {/* POPUP DE NOTIFICACIÓN DE PERSONAL (4 SEGUNDOS) */}
-            {staffMessage && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 pointer-events-none">
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-                    <div className={cn(
-                        "glass relative min-w-[600px] p-16 rounded-[4rem] border-4 shadow-[0_0_150px_rgba(0,0,0,0.8)] transform animate-in fade-in zoom-in duration-500 flex flex-col items-center gap-10",
-                        staffMessage.type === 'success' ? "border-success-green/60 bg-success-green/10" :
-                            (staffMessage.type === 'error' || staffMessage.type === 'exit') ? "border-danger-red/60 bg-danger-red/10" :
-                                "border-primary-blue/60 bg-primary-blue/10"
-                    )}>
+            {
+                staffMessage && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 pointer-events-none">
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
                         <div className={cn(
-                            "p-10 rounded-full shadow-2xl",
-                            staffMessage.type === 'success' ? "bg-success-green text-black" :
-                                (staffMessage.type === 'error' || staffMessage.type === 'exit') ? "bg-danger-red text-white" :
-                                    "bg-primary-blue text-white"
+                            "glass relative min-w-[600px] p-16 rounded-[4rem] border-4 shadow-[0_0_150px_rgba(0,0,0,0.8)] transform animate-in fade-in zoom-in duration-500 flex flex-col items-center gap-10",
+                            staffMessage.type === 'success' ? "border-success-green/60 bg-success-green/10" :
+                                (staffMessage.type === 'error' || staffMessage.type === 'exit') ? "border-danger-red/60 bg-danger-red/10" :
+                                    "border-primary-blue/60 bg-primary-blue/10"
                         )}>
-                            {staffMessage.type === 'success' ? <UserPlus className="h-24 w-24" /> :
-                                staffMessage.type === 'exit' ? <LogOut className="h-24 w-24" /> :
-                                    staffMessage.type === 'error' ? <X className="h-24 w-24" /> :
-                                        <Users className="h-24 w-24" />}
-                        </div>
-                        <h4 className={cn(
-                            "text-6xl font-black text-center uppercase tracking-tighter leading-tight max-w-[800px]",
-                            staffMessage.type === 'success' ? "text-success-green" :
-                                (staffMessage.type === 'error' || staffMessage.type === 'exit') ? "text-danger-red" :
-                                    "text-primary-blue"
-                        )}>
-                            {staffMessage.text}
-                        </h4>
-                        <div className="w-full max-w-sm h-2 bg-white/10 rounded-full overflow-hidden mt-4">
                             <div className={cn(
-                                "h-full animate-[progress_4s_linear]",
-                                staffMessage.type === 'success' ? "bg-success-green" :
-                                    (staffMessage.type === 'error' || staffMessage.type === 'exit') ? "bg-danger-red" :
-                                        "bg-primary-blue"
-                            )} />
+                                "p-10 rounded-full shadow-2xl",
+                                staffMessage.type === 'success' ? "bg-success-green text-black" :
+                                    (staffMessage.type === 'error' || staffMessage.type === 'exit') ? "bg-danger-red text-white" :
+                                        "bg-primary-blue text-white"
+                            )}>
+                                {staffMessage.type === 'success' ? <UserPlus className="h-24 w-24" /> :
+                                    staffMessage.type === 'exit' ? <LogOut className="h-24 w-24" /> :
+                                        staffMessage.type === 'error' ? <X className="h-24 w-24" /> :
+                                            <Users className="h-24 w-24" />}
+                            </div>
+                            <h4 className={cn(
+                                "text-6xl font-black text-center uppercase tracking-tighter leading-tight max-w-[800px]",
+                                staffMessage.type === 'success' ? "text-success-green" :
+                                    (staffMessage.type === 'error' || staffMessage.type === 'exit') ? "text-danger-red" :
+                                        "text-primary-blue"
+                            )}>
+                                {staffMessage.text}
+                            </h4>
+                            <div className="w-full max-w-sm h-2 bg-white/10 rounded-full overflow-hidden mt-4">
+                                <div className={cn(
+                                    "h-full animate-[progress_4s_linear]",
+                                    staffMessage.type === 'success' ? "bg-success-green" :
+                                        (staffMessage.type === 'error' || staffMessage.type === 'exit') ? "bg-danger-red" :
+                                            "bg-primary-blue"
+                                )} />
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 }
