@@ -483,7 +483,7 @@ export default function MonitoreoPage() {
     const porcentaje = Math.min(100, Math.round((proceso.trabajoCompletado / proceso.cantidadProducir) * 100) || 0);
 
     return (
-        <div className="min-h-screen bg-background text-white flex flex-col">
+        <div className="h-screen bg-background text-white flex flex-col overflow-hidden">
             {/* Header Compacto */}
             <header className="border-b border-white/10 bg-black/50 backdrop-blur-md p-4 flex items-center justify-between sticky top-0 z-50">
                 <div className="flex flex-wrap items-center gap-4">
@@ -548,7 +548,7 @@ export default function MonitoreoPage() {
             </header>
 
             {/* Main Layout Grid */}
-            <main className="flex-1 p-6 grid grid-cols-12 gap-6 overflow-auto max-w-[1700px] mx-auto w-full">
+            <main className="flex-1 p-4 md:p-6 grid grid-cols-12 gap-4 md:gap-6 overflow-hidden max-w-[1900px] mx-auto w-full h-full">
 
                 {/* Left Column: Giant Timer */}
                 <div className={cn("flex flex-col gap-6 h-full", proceso.utilizaTemporizador ? "col-span-12 lg:col-span-8" : "col-span-12")}>
@@ -559,24 +559,24 @@ export default function MonitoreoPage() {
                         // Para procesos de tipo 'otros' (con orden de producción, sin temporizador)
                         if (tipoProc === 'otros') {
                             return (
-                                <div className="glass rounded-[2.5rem] p-8 bg-gradient-to-br from-white/[0.05] to-transparent border-white/5">
-                                    <div className="space-y-8">
+                                <div className="glass rounded-[2.5rem] p-6 bg-gradient-to-br from-white/[0.05] to-transparent border-white/5 shrink-0">
+                                    <div className="space-y-6">
                                         {/* Producto */}
                                         <div className="space-y-1">
-                                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Producto en proceso</p>
-                                            <h4 className="text-xl md:text-2xl font-black text-white leading-tight uppercase line-clamp-3">{proceso.producto}</h4>
+                                            <p className="text-[clamp(0.5rem,0.8vw,0.65rem)] font-black text-gray-500 uppercase tracking-widest">Producto en proceso</p>
+                                            <h4 className="text-[clamp(1.2rem,2vw,1.5rem)] font-black text-white leading-tight uppercase line-clamp-2">{proceso.producto}</h4>
                                         </div>
 
                                         {/* Orden de Producción y Lote - lado a lado */}
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div className="bg-white/5 p-4 md:p-5 rounded-2xl border border-white/5">
-                                                <p className="text-xs font-black text-gray-500 uppercase mb-1">Orden de Producción</p>
-                                                <p className="text-2xl md:text-3xl font-mono font-black text-white break-all">{proceso.ordenProduccion}</p>
+                                            <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
+                                                <p className="text-[clamp(0.5rem,0.8vw,0.75rem)] font-black text-gray-500 uppercase mb-1">Orden de Producción</p>
+                                                <p className="text-[clamp(1.2rem,2vw,1.5rem)] font-mono font-black text-white break-all">{proceso.ordenProduccion}</p>
                                             </div>
 
-                                            <div className="bg-white/5 p-4 md:p-5 rounded-2xl border border-white/5">
-                                                <p className="text-xs font-black text-gray-500 uppercase mb-1">Lote</p>
-                                                <p className="text-2xl md:text-3xl font-black text-white uppercase break-all">{proceso.lote}</p>
+                                            <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
+                                                <p className="text-[clamp(0.5rem,0.8vw,0.75rem)] font-black text-gray-500 uppercase mb-1">Lote</p>
+                                                <p className="text-[clamp(1.2rem,2vw,1.5rem)] font-black text-white uppercase break-all">{proceso.lote}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -587,11 +587,11 @@ export default function MonitoreoPage() {
                         // Para procesos de tipo 'anexos' (sin orden de producción, sin temporizador)
                         if (tipoProc === 'anexos') {
                             return (
-                                <div className="glass rounded-[2.5rem] p-8 bg-gradient-to-br from-white/[0.05] to-transparent border-white/5">
+                                <div className="glass rounded-[2.5rem] p-6 bg-gradient-to-br from-white/[0.05] to-transparent border-white/5 shrink-0">
                                     <div className="space-y-1">
                                         {/* Producto */}
-                                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Proceso</p>
-                                        <h4 className="text-2xl font-black text-white leading-tight uppercase line-clamp-2">{proceso.producto}</h4>
+                                        <p className="text-[clamp(0.5rem,0.8vw,0.65rem)] font-black text-gray-500 uppercase tracking-widest">Proceso</p>
+                                        <h4 className="text-[clamp(1.5rem,2.5vw,2rem)] font-black text-white leading-tight uppercase line-clamp-2">{proceso.producto}</h4>
                                     </div>
                                 </div>
                             );
@@ -601,7 +601,7 @@ export default function MonitoreoPage() {
                         return null;
                     })()}
 
-                    <div className="glass rounded-[3rem] p-12 flex flex-col items-center justify-center relative overflow-hidden group shadow-2xl border-white/5 flex-1 min-h-[500px]">
+                    <div className="glass rounded-[3rem] p-8 md:p-12 flex flex-col items-center justify-center relative overflow-hidden group shadow-2xl border-white/5 flex-1 min-h-0">
                         {/* Progress Bar */}
                         {proceso.estado !== 'Registrado' && (
                             <div className="absolute top-0 left-0 w-full h-1.5 bg-white/5">
@@ -615,9 +615,9 @@ export default function MonitoreoPage() {
                         {!proceso.utilizaTemporizador && !proceso.contabilizaSetup ? (
                             // Procesos sin temporizador: mostrar estado basado en personal
                             <>
-                                <p className="text-sm font-black text-gray-500 uppercase tracking-[0.6em] mb-6">ESTADO DEL PROCESO</p>
+                                <p className="text-[clamp(0.7rem,1.2vw,0.875rem)] font-black text-gray-500 uppercase tracking-[0.6em] mb-4 md:mb-6">ESTADO DEL PROCESO</p>
                                 <h2 className={cn(
-                                    "text-8xl md:text-9xl font-black tracking-tighter leading-none transition-colors duration-500 select-none",
+                                    "text-[clamp(4rem,15vw,9rem)] font-black tracking-tighter leading-none transition-colors duration-500 select-none",
                                     personalActivo > 0 ? "text-success-green" : "text-warning-yellow"
                                 )}>
                                     {personalActivo > 0 ? "EN PROCESO" : "EN PAUSA"}
@@ -626,13 +626,15 @@ export default function MonitoreoPage() {
                         ) : (
                             // Procesos con temporizador: mostrar reloj normal
                             <>
-                                <p className="text-sm font-black text-gray-500 uppercase tracking-[0.6em] mb-6">
+                                <p className="text-[clamp(0.7rem,1.2vw,0.875rem)] font-black text-gray-500 uppercase tracking-[0.6em] mb-4 md:mb-6">
                                     {proceso.contabilizaSetup && proceso.setupEstado !== 'finalizado' ? 'TIEMPO DE SETUP' : 'TIEMPO RESTANTE ESTIMADO'}
                                 </p>
 
                                 <h2 className={cn(
                                     "font-black tracking-tighter leading-none transition-colors duration-500 tabular-nums select-none text-center",
-                                    stats.tiempoRestanteStr === "PERSONAL REQUERIDO" ? "text-4xl sm:text-6xl md:text-7xl lg:text-8xl" : "text-7xl sm:text-9xl md:text-[10rem] lg:text-[12rem] xl:text-[14rem]",
+                                    stats.tiempoRestanteStr === "PERSONAL REQUERIDO"
+                                        ? "text-[clamp(2rem,8vw,6rem)]"
+                                        : "text-[clamp(4rem,18vw,14rem)]",
                                     (proceso.estado === 'Iniciado' || proceso.setupEstado === 'en curso') ? "text-white" : "text-gray-600",
                                     stats.isGracePeriod && "text-warning-yellow",
                                     stats.isTiempoExtra && "text-danger-red animate-pulse"
@@ -719,14 +721,14 @@ export default function MonitoreoPage() {
 
                         {/* LINEA DIVISORA Y CONTROL DE PERSONAL EXPRESS (DENTRO DE LA SECCIÓN) */}
                         <div className="mt-12 w-full pt-10 border-t border-white/5 max-w-4xl">
-                            <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center justify-between mb-4 md:mb-6">
                                 <div className="flex items-center gap-3">
                                     <Users className="h-5 w-5 text-success-green" />
-                                    <h3 className="text-sm font-black tracking-[0.3em] uppercase text-gray-400">CONTROL DE PERSONAL</h3>
+                                    <h3 className="text-[clamp(0.6rem,1vw,0.875rem)] font-black tracking-[0.3em] uppercase text-gray-400">CONTROL DE PERSONAL</h3>
                                 </div>
                                 <button
                                     onClick={() => setShowStaffModal(true)}
-                                    className="px-4 py-1.5 bg-success-green/10 text-success-green rounded-full text-[10px] font-black border border-success-green/20 hover:bg-success-green/20 transition-all uppercase tracking-widest"
+                                    className="px-4 py-1.5 bg-success-green/10 text-success-green rounded-full text-[clamp(0.5rem,0.8vw,0.65rem)] font-black border border-success-green/20 hover:bg-success-green/20 transition-all uppercase tracking-widest"
                                 >
                                     {personalActivo} EN LÍNEA – Ver Lista
                                 </button>
@@ -748,6 +750,18 @@ export default function MonitoreoPage() {
                                     {staffActionLoading && (
                                         <div className="absolute right-4 top-1/2 -translate-y-1/2">
                                             <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary-blue border-t-transparent" />
+                                        </div>
+                                    )}
+
+                                    {/* Mensaje de Feedback de Personal */}
+                                    {staffMessage && (
+                                        <div className={cn(
+                                            "absolute -top-12 left-0 right-0 py-2 px-4 rounded-xl text-center font-black text-xs uppercase tracking-widest animate-in slide-in-from-bottom-2 fade-in duration-300",
+                                            staffMessage.type === 'success' ? "bg-success-green text-black" :
+                                                staffMessage.type === 'error' ? "bg-danger-red text-white" :
+                                                    staffMessage.type === 'info' ? "bg-primary-blue text-white" : "bg-warning-yellow text-black"
+                                        )}>
+                                            {staffMessage.text}
                                         </div>
                                     )}
                                 </div>
@@ -795,35 +809,35 @@ export default function MonitoreoPage() {
                                 <div className="space-y-8">
                                     {/* Producto */}
                                     <div className="space-y-1">
-                                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Producto en proceso</p>
-                                        <h4 className="text-2xl font-black text-white leading-tight uppercase line-clamp-2">{proceso.producto}</h4>
+                                        <p className="text-[clamp(0.5rem,0.8vw,0.65rem)] font-black text-gray-500 uppercase tracking-widest">Producto en proceso</p>
+                                        <h4 className="text-[clamp(1.1rem,2vw,1.5rem)] font-black text-white leading-tight uppercase line-clamp-2">{proceso.producto}</h4>
                                     </div>
 
                                     {/* Líder de Línea - Solo para procesos con temporizador */}
                                     {proceso.utilizaTemporizador && (
-                                        <div className="space-y-1 bg-primary-blue/10 p-5 rounded-2xl border border-primary-blue/10">
+                                        <div className="space-y-1 bg-primary-blue/10 p-4 md:p-5 rounded-2xl border border-primary-blue/10">
                                             <div className="flex items-center gap-2 mb-1">
                                                 <Users className="h-4 w-4 text-primary-blue" />
-                                                <p className="text-[10px] font-black text-primary-blue uppercase tracking-widest">Líder de Línea</p>
+                                                <p className="text-[clamp(0.5rem,0.8vw,0.65rem)] font-black text-primary-blue uppercase tracking-widest">Líder de Línea</p>
                                             </div>
-                                            <h4 className="text-xl font-black text-white uppercase truncate">{proceso.lider}</h4>
+                                            <h4 className="text-[clamp(1rem,1.5vw,1.25rem)] font-black text-white uppercase truncate">{proceso.lider}</h4>
                                         </div>
                                     )}
 
                                     {/* Orden / Lote / Etapa Grid */}
                                     <div className="grid grid-cols-1 gap-4">
-                                        <div className="bg-white/5 p-4 md:p-5 rounded-2xl border border-white/5">
-                                            <p className="text-xs font-black text-gray-500 uppercase mb-1">Orden de Producción</p>
-                                            <p className="text-2xl md:text-4xl font-mono font-black text-white break-all">{proceso.ordenProduccion}</p>
+                                        <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                            <p className="text-[clamp(0.5rem,0.8vw,0.75rem)] font-black text-gray-500 uppercase mb-1">Orden de Producción</p>
+                                            <p className="text-[clamp(1.5rem,2.5vw,2.5rem)] font-mono font-black text-white break-all">{proceso.ordenProduccion}</p>
                                         </div>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div className="bg-white/5 p-4 md:p-5 rounded-2xl border border-white/5">
-                                                <p className="text-xs font-black text-gray-500 uppercase mb-1">Lote</p>
-                                                <p className="text-2xl md:text-3xl font-black text-white uppercase break-all">{proceso.lote}</p>
+                                            <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                                <p className="text-[clamp(0.5rem,0.8vw,0.75rem)] font-black text-gray-500 uppercase mb-1">Lote</p>
+                                                <p className="text-[clamp(1.2rem,2vw,1.875rem)] font-black text-white uppercase break-all">{proceso.lote}</p>
                                             </div>
-                                            <div className="bg-white/5 p-4 md:p-5 rounded-2xl border border-white/5">
-                                                <p className="text-xs font-black text-gray-500 uppercase mb-1">Etapa</p>
-                                                <p className="text-2xl md:text-3xl font-black text-white uppercase">{proceso.etapa}</p>
+                                            <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                                <p className="text-[clamp(0.5rem,0.8vw,0.75rem)] font-black text-gray-500 uppercase mb-1">Etapa</p>
+                                                <p className="text-[clamp(1.2rem,2vw,1.875rem)] font-black text-white uppercase">{proceso.etapa}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -833,25 +847,25 @@ export default function MonitoreoPage() {
                             {/* METRICS (SIDEBAR) - Solo para procesos con temporizador */}
                             {proceso.utilizaTemporizador && (
                                 <div className="space-y-4">
-                                    <div className="glass p-6 rounded-3xl flex items-center gap-5 border-l-4 border-primary-blue shadow-md">
-                                        <div className="p-4 bg-primary-blue/10 rounded-2xl">
-                                            <Activity className="h-7 w-7 text-primary-blue" />
+                                    <div className="glass p-4 md:p-6 rounded-3xl flex items-center gap-4 md:gap-5 border-l-4 border-primary-blue shadow-md">
+                                        <div className="p-3 md:p-4 bg-primary-blue/10 rounded-2xl shrink-0">
+                                            <Activity className="h-6 w-6 md:h-7 md:w-7 text-primary-blue" />
                                         </div>
                                         <div>
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Velocidad Equipo</p>
-                                            <h3 className="text-3xl font-black tracking-tight">{stats.velocidadActual} <span className="text-xs text-gray-500">est/min</span></h3>
+                                            <p className="text-[clamp(0.5rem,0.8vw,0.65rem)] font-black text-gray-400 uppercase tracking-widest mb-1">Velocidad Equipo</p>
+                                            <h3 className="text-[clamp(1.5rem,2.5vw,2rem)] font-black tracking-tight">{stats.velocidadActual} <span className="text-xs text-gray-500">est/min</span></h3>
                                         </div>
                                     </div>
 
-                                    <div className="glass p-6 rounded-3xl flex items-center gap-5 border-l-4 border-accent-purple shadow-md">
-                                        <div className="p-4 bg-accent-purple/10 rounded-2xl">
-                                            <ClipboardList className="h-7 w-7 text-accent-purple" />
+                                    <div className="glass p-4 md:p-6 rounded-3xl flex items-center gap-4 md:gap-5 border-l-4 border-accent-purple shadow-md">
+                                        <div className="p-3 md:p-4 bg-accent-purple/10 rounded-2xl shrink-0">
+                                            <ClipboardList className="h-6 w-6 md:h-7 md:w-7 text-accent-purple" />
                                         </div>
                                         <div>
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Unidades Pendientes</p>
-                                            <h3 className="text-3xl font-black tracking-tight">
+                                            <p className="text-[clamp(0.5rem,0.8vw,0.65rem)] font-black text-gray-400 uppercase tracking-widest mb-1">Unidades Pendientes</p>
+                                            <h3 className="text-[clamp(1.5rem,2.5vw,2rem)] font-black tracking-tight">
                                                 {Math.max(0, proceso.cantidadProducir - calculatedUnits).toLocaleString()}
-                                                <span className="text-xs text-gray-500 ml-2">por empacar</span>
+                                                <span className="text-[10px] text-gray-500 ml-2">por empacar</span>
                                             </h3>
                                         </div>
                                     </div>
@@ -1058,14 +1072,14 @@ export default function MonitoreoPage() {
                             </div>
 
                             <div className="space-y-2">
-                                <h3 className="text-4xl md:text-5xl font-black uppercase tracking-tighter text-black leading-tight">
+                                <h3 className="text-[clamp(2rem,6vw,4rem)] font-black uppercase tracking-tighter text-black leading-tight">
                                     {proceso.calidadEstado === 'esperando' ? 'En espera de calidad' : 'Inspección de calidad'}
                                 </h3>
-                                <div className="flex items-center justify-center gap-2 text-black/50 font-black uppercase tracking-[0.2em] text-sm">
+                                <div className="flex items-center justify-center gap-2 text-black/50 font-black uppercase tracking-[0.2em] text-[clamp(0.7rem,1.2vw,0.875rem)]">
                                     <Clock className="h-4 w-4" />
                                     {proceso.calidadEstado === 'esperando' ? 'Tiempo transcurrido' : 'Tiempo en inspección'}
                                 </div>
-                                <div className="text-8xl font-mono font-black text-black mt-4 tracking-tighter drop-shadow-sm">
+                                <div className="text-[clamp(4rem,15vw,8rem)] font-mono font-black text-black mt-4 tracking-tighter drop-shadow-sm">
                                     {calidadTimerStr}
                                 </div>
                             </div>

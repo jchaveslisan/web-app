@@ -16,6 +16,13 @@ export default function NuevoProcesoPage() {
     const [etapas, setEtapas] = useState<Etapa[]>([]);
     const [colaboradores, setColaboradores] = useState<ColaboradorMaestro[]>([]);
 
+    // Protección de ruta admistrativa
+    useEffect(() => {
+        if (user && !['supervisor', 'superadmin'].includes(user.rol)) {
+            router.push('/procesos');
+        }
+    }, [user, router]);
+
     useEffect(() => {
         const fetchColaboradores = async () => {
             const data = await getMaestroColaboradores();

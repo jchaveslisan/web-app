@@ -14,6 +14,7 @@ import {
     LogOut
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/lib/auth-service';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { ColaboradorMaestro, Justificacion, Etapa, User, UserRole } from '@/types';
@@ -34,6 +35,15 @@ export default function AdminPage() {
     const [newEtapaNombre, setNewEtapaNombre] = useState('');
     const [newEtapaTipos, setNewEtapaTipos] = useState<string[]>(['empaque', 'otros', 'anexos']);
     const router = useRouter();
+
+    const user = useAuthStore(state => state.user);
+
+    // Protección de ruta admistrativa
+    useEffect(() => {
+        if (!loading && (!user || !['supervisor', 'superadmin'].includes(user.rol))) {
+            router.push('/procesos');
+        }
+    }, [user, loading, router]);
 
     // Cargar colaboradores
     useEffect(() => {
