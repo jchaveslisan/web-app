@@ -19,27 +19,11 @@ export default function LoginForm() {
         setError('');
 
         try {
-            // Intentamos iniciar sesión con Firebase Auth
-            const { metadata } = await signIn(username, password);
-
-            if (metadata) {
-                if (!metadata.activo) {
-                    setError('Su cuenta está pendiente de aprobación por un administrador.');
-                    // Opcional: Cerrar sesión en firebase para evitar que quede logueado
-                    // await import('@/lib/auth-service').then(m => m.logout()); 
-                } else {
-                    router.push('/procesos');
-                }
-            } else {
-                setError('El usuario no tiene un rol asignado en el sistema.');
-            }
+            await signIn(username, password);
+            router.push('/procesos');
         } catch (err: any) {
             console.error('Login error:', err);
-            if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-                setError('Correo o contraseña incorrectos');
-            } else {
-                setError('Error al conectar con el servidor: ' + err.message);
-            }
+            setError(err.message || 'Error al iniciar sesión');
         } finally {
             setLoading(false);
         }
@@ -63,7 +47,7 @@ export default function LoginForm() {
                 <div className="space-y-4">
                     <div>
                         <label className="block text-sm font-semibold text-gray-300 mb-1" htmlFor="username">
-                            Correo Electrónico
+                            Nombre de Usuario o Email
                         </label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -72,10 +56,10 @@ export default function LoginForm() {
                             <input
                                 id="username"
                                 name="username"
-                                type="email"
+                                type="text"
                                 required
                                 className="block w-full pl-10 pr-3 py-3 border border-white/10 rounded-xl bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-blue/50 focus:border-primary-blue transition-all duration-200"
-                                placeholder="usuario@tuempresa.com"
+                                placeholder="ej: jsmith"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
                             />

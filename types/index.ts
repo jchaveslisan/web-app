@@ -4,6 +4,7 @@ export interface User {
     id: string;
     username: string;
     email: string;
+    password?: string;
     rol: UserRole;
     activo: boolean;
     creadoEn: string;
@@ -13,6 +14,7 @@ export interface ColaboradorMaestro {
     id: string;
     claveRegistro: string;
     nombreCompleto: string;
+    mensajePersonalizado?: string;
     activo: boolean;
 }
 

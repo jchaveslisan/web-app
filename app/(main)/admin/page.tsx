@@ -11,11 +11,13 @@ import {
     Check,
     X,
     Pause,
-    LogOut
+    LogOut,
+    Settings,
+    Key
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/auth-service';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { ColaboradorMaestro, Justificacion, Etapa, User, UserRole } from '@/types';
 
@@ -34,7 +36,18 @@ export default function AdminPage() {
     const [newEtapaCodigo, setNewEtapaCodigo] = useState('');
     const [newEtapaNombre, setNewEtapaNombre] = useState('');
     const [newEtapaTipos, setNewEtapaTipos] = useState<string[]>(['empaque', 'otros', 'anexos']);
+    const [editingItem, setEditingItem] = useState<{ id: string, type: string, data: any } | null>(null);
     const router = useRouter();
+
+    // Form states for adding
+    const [newUsername, setNewUsername] = useState('');
+    const [newEmail, setNewEmail] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [newRole, setNewRole] = useState<UserRole>('usuario');
+    const [newMensaje, setNewMensaje] = useState('');
+
+    // For editing
+    const [editValue, setEditValue] = useState<any>({});
 
     const user = useAuthStore(state => state.user);
 
@@ -85,7 +98,7 @@ export default function AdminPage() {
 
     // Cargar usuarios
     useEffect(() => {
-        const q = query(collection(db, 'usuarios'), orderBy('email', 'asc'));
+        const q = query(collection(db, 'usuarios'), orderBy('username', 'asc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
             setUsuarios(data);
@@ -100,10 +113,34 @@ export default function AdminPage() {
             await addDoc(collection(db, 'maestro_colaboradores'), {
                 nombreCompleto: newNombre.toUpperCase(),
                 claveRegistro: newID,
+                mensajePersonalizado: newMensaje || null,
                 activo: true
             });
             setNewNombre('');
             setNewID('');
+            setNewMensaje('');
+            setShowForm(false);
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    const handleAddUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newUsername || !newPassword) return;
+        try {
+            await addDoc(collection(db, 'usuarios'), {
+                username: newUsername.toLowerCase(),
+                email: newEmail.toLowerCase(),
+                password: newPassword,
+                rol: newRole,
+                activo: true,
+                creadoEn: new Date().toISOString()
+            });
+            setNewUsername('');
+            setNewEmail('');
+            setNewPassword('');
+            setNewRole('usuario');
             setShowForm(false);
         } catch (error) {
             console.error(error);
@@ -145,7 +182,27 @@ export default function AdminPage() {
         }
     };
 
-    const handleToggleActivo = async (id: string, current: boolean, collection_name: 'maestro_colaboradores' | 'maestro_justificaciones' | 'maestro_etapas') => {
+    const handleSaveEdit = async () => {
+        if (!editingItem) return;
+        try {
+            let collectionName = '';
+            switch (editingItem.type) {
+                case 'personal': collectionName = 'maestro_colaboradores'; break;
+                case 'pausa':
+                case 'salida': collectionName = 'maestro_justificaciones'; break;
+                case 'etapa': collectionName = 'maestro_etapas'; break;
+                case 'usuario': collectionName = 'usuarios'; break;
+            }
+
+            await updateDoc(doc(db, collectionName, editingItem.id), editValue);
+            setEditingItem(null);
+            setEditValue({});
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    const handleToggleActivo = async (id: string, current: boolean, collection_name: string) => {
         try {
             await updateDoc(doc(db, collection_name, id), { activo: !current });
         } catch (error) {
@@ -153,7 +210,7 @@ export default function AdminPage() {
         }
     };
 
-    const handleDelete = async (id: string, collection_name: 'maestro_colaboradores' | 'maestro_justificaciones' | 'maestro_etapas') => {
+    const handleDelete = async (id: string, collection_name: string) => {
         if (!confirm("¿Eliminar este registro de forma permanente?")) return;
         try {
             await deleteDoc(doc(db, collection_name, id));
@@ -288,6 +345,15 @@ export default function AdminPage() {
                                             placeholder="Ej: 887766"
                                         />
                                     </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-xs font-black text-gray-500 uppercase mb-2">Mensaje Personalizado (Ingreso/Salida)</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary-blue"
+                                            value={newMensaje}
+                                            onChange={(e) => setNewMensaje(e.target.value)}
+                                            placeholder="Ej: ¡Buen turno crack! / ¡A descansar mopa!"
+                                        />
+                                    </div>
                                 </div>
                                 <button type="submit" className="mt-6 w-full bg-success-green text-black font-black py-4 rounded-xl flex items-center justify-center gap-2">
                                     <Check className="h-6 w-6" /> GUARDAR EN MAESTRO
@@ -322,6 +388,19 @@ export default function AdminPage() {
                                                 </button>
                                             </td>
                                             <td className="p-5 text-right space-x-2">
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingItem({ id: colab.id, type: 'personal', data: colab });
+                                                        setEditValue({
+                                                            nombreCompleto: colab.nombreCompleto,
+                                                            claveRegistro: colab.claveRegistro,
+                                                            mensajePersonalizado: colab.mensajePersonalizado || ''
+                                                        });
+                                                    }}
+                                                    className="p-2 hover:bg-white/10 text-gray-400 rounded-lg transition-all"
+                                                >
+                                                    <Edit2 className="h-5 w-5" />
+                                                </button>
                                                 <button onClick={() => handleDelete(colab.id, 'maestro_colaboradores')} className="p-2 hover:bg-danger-red/20 text-danger-red rounded-lg transition-all">
                                                     <Trash2 className="h-5 w-5" />
                                                 </button>
@@ -391,6 +470,15 @@ export default function AdminPage() {
                                                 </button>
                                             </td>
                                             <td className="p-5 text-right space-x-2">
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingItem({ id: just.id, type: 'pausa', data: just });
+                                                        setEditValue({ texto: just.texto });
+                                                    }}
+                                                    className="p-2 hover:bg-white/10 text-gray-400 rounded-lg transition-all"
+                                                >
+                                                    <Edit2 className="h-5 w-5" />
+                                                </button>
                                                 <button onClick={() => handleDelete(just.id, 'maestro_justificaciones')} className="p-2 hover:bg-danger-red/20 text-danger-red rounded-lg transition-all">
                                                     <Trash2 className="h-5 w-5" />
                                                 </button>
@@ -460,6 +548,15 @@ export default function AdminPage() {
                                                 </button>
                                             </td>
                                             <td className="p-5 text-right space-x-2">
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingItem({ id: just.id, type: 'salida', data: just });
+                                                        setEditValue({ texto: just.texto });
+                                                    }}
+                                                    className="p-2 hover:bg-white/10 text-gray-400 rounded-lg transition-all"
+                                                >
+                                                    <Edit2 className="h-5 w-5" />
+                                                </button>
                                                 <button onClick={() => handleDelete(just.id, 'maestro_justificaciones')} className="p-2 hover:bg-danger-red/20 text-danger-red rounded-lg transition-all">
                                                     <Trash2 className="h-5 w-5" />
                                                 </button>
@@ -587,6 +684,15 @@ export default function AdminPage() {
                                                 </button>
                                             </td>
                                             <td className="p-5 text-right space-x-2">
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingItem({ id: etapa.id, type: 'etapa', data: etapa });
+                                                        setEditValue({ codigo: etapa.codigo, nombre: etapa.nombre, tiposProceso: etapa.tiposProceso });
+                                                    }}
+                                                    className="p-2 hover:bg-white/10 text-gray-400 rounded-lg transition-all"
+                                                >
+                                                    <Edit2 className="h-5 w-5" />
+                                                </button>
                                                 <button onClick={() => handleDelete(etapa.id, 'maestro_etapas')} className="p-2 hover:bg-danger-red/20 text-danger-red rounded-lg transition-all">
                                                     <Trash2 className="h-5 w-5" />
                                                 </button>
@@ -605,45 +711,123 @@ export default function AdminPage() {
                     <>
                         <div className="flex items-center justify-between mb-8">
                             <h2 className="text-xl font-black uppercase tracking-widest text-emerald-400">Control de Usuarios</h2>
+                            <button
+                                onClick={() => setShowForm(!showForm)}
+                                className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 px-6 py-3 rounded-xl font-bold transition-all text-black"
+                            >
+                                {showForm ? <X className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+                                {showForm ? "CANCELAR" : "CREAR USUARIO"}
+                            </button>
                         </div>
+
+                        {showForm && (
+                            <form onSubmit={handleAddUser} className="glass p-8 rounded-3xl mb-8 border border-emerald-500/30 animate-in fade-in slide-in-from-top-4 duration-300">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-500 uppercase mb-2">Username</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-emerald-500"
+                                            value={newUsername}
+                                            onChange={(e) => setNewUsername(e.target.value.toLowerCase())}
+                                            placeholder="ej: jsmith"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-500 uppercase mb-2">Password</label>
+                                        <input
+                                            type="text"
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-emerald-500"
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            placeholder="Contraseña"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-500 uppercase mb-2">Email (Opcional)</label>
+                                        <input
+                                            type="email"
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-emerald-500"
+                                            value={newEmail}
+                                            onChange={(e) => setNewEmail(e.target.value)}
+                                            placeholder="email@ejemplo.com"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-500 uppercase mb-2">Rol de Usuario</label>
+                                        <select
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-emerald-500 outline-none"
+                                            value={newRole}
+                                            onChange={(e) => setNewRole(e.target.value as UserRole)}
+                                        >
+                                            <option value="usuario">Usuario</option>
+                                            <option value="supervisor">Supervisor</option>
+                                            <option value="superadmin">Superadmin</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button type="submit" className="mt-6 w-full bg-emerald-500 text-black font-black py-4 rounded-xl flex items-center justify-center gap-2">
+                                    <Check className="h-6 w-6" /> REGISTRAR ACCESO
+                                </button>
+                            </form>
+                        )}
 
                         <div className="glass rounded-3xl overflow-hidden border border-white/10">
                             <table className="w-full text-left">
                                 <thead>
                                     <tr className="bg-white/5 border-b border-white/10">
                                         <th className="p-5 text-xs font-black uppercase text-gray-500">Usuario</th>
-                                        <th className="p-5 text-xs font-black uppercase text-gray-500">Email</th>
+                                        <th className="p-5 text-xs font-black uppercase text-gray-500">Password</th>
                                         <th className="p-5 text-xs font-black uppercase text-gray-500">Rol</th>
                                         <th className="p-5 text-xs font-black uppercase text-gray-500">Estado</th>
+                                        <th className="p-5 text-right text-xs font-black uppercase text-gray-500">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
                                     {usuarios.map((u) => (
                                         <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
-                                            <td className="p-5 font-bold">{u.username || 'Sin nombre'}</td>
-                                            <td className="p-5 text-gray-400 font-mono text-sm">{u.email}</td>
                                             <td className="p-5">
-                                                <select
-                                                    value={u.rol}
-                                                    onChange={(e) => handleUpdateUserRole(u.id, e.target.value as UserRole)}
-                                                    className="bg-black/20 border border-white/10 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-primary-blue outline-none"
-                                                >
-                                                    <option value="usuario">Usuario</option>
-                                                    <option value="supervisor">Supervisor</option>
-                                                    <option value="superadmin">Superadmin</option>
-                                                </select>
+                                                <div className="font-bold">{u.username}</div>
+                                                <div className="text-[10px] text-gray-500">{u.email}</div>
+                                            </td>
+                                            <td className="p-5 font-mono text-xs text-gray-400">
+                                                <div className="flex items-center gap-2">
+                                                    <Key className="h-3 w-3" /> {u.password}
+                                                </div>
+                                            </td>
+                                            <td className="p-5">
+                                                <span className={cn(
+                                                    "px-2 py-1 rounded text-[10px] font-black uppercase",
+                                                    u.rol === 'superadmin' ? "bg-primary-blue/20 text-primary-blue" :
+                                                        u.rol === 'supervisor' ? "bg-warning-yellow/20 text-warning-yellow" : "bg-white/10 text-gray-400"
+                                                )}>
+                                                    {u.rol}
+                                                </span>
                                             </td>
                                             <td className="p-5">
                                                 <button
                                                     onClick={() => handleToggleUserActive(u.id, u.activo)}
                                                     className={cn(
                                                         "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all",
-                                                        u.activo
-                                                            ? "bg-success-green/10 border-success-green/20 text-success-green hover:bg-success-green/20"
-                                                            : "bg-danger-red/10 border-danger-red/20 text-danger-red hover:bg-danger-red/20"
+                                                        u.activo ? "bg-success-green/10 border-success-green/20 text-success-green" : "bg-danger-red/10 border-danger-red/20 text-danger-red"
                                                     )}
                                                 >
                                                     {u.activo ? "ACTIVO" : "INACTIVO"}
+                                                </button>
+                                            </td>
+                                            <td className="p-5 text-right space-x-2">
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingItem({ id: u.id, type: 'usuario', data: u });
+                                                        setEditValue({ username: u.username, password: u.password, email: u.email, rol: u.rol });
+                                                    }}
+                                                    className="p-2 hover:bg-white/10 text-gray-400 rounded-lg transition-all"
+                                                >
+                                                    <Edit2 className="h-5 w-5" />
+                                                </button>
+                                                <button onClick={() => handleDelete(u.id, 'usuarios')} className="p-2 hover:bg-danger-red/20 text-danger-red rounded-lg transition-all">
+                                                    <Trash2 className="h-5 w-5" />
                                                 </button>
                                             </td>
                                         </tr>
@@ -655,6 +839,133 @@ export default function AdminPage() {
                     </>
                 )}
             </div>
+            {/* MODAL DE EDICIÓN UNIVERSAL */}
+            {editingItem && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+                    <div className="glass w-full max-w-xl rounded-[2.5rem] overflow-hidden flex flex-col border-white/10 shadow-2xl animate-in zoom-in duration-300">
+                        <div className="p-8 border-b border-white/10 flex items-center justify-between bg-white/5">
+                            <h3 className="text-2xl font-black uppercase flex items-center gap-3">
+                                <Edit2 className="h-7 w-7 text-primary-blue" /> EDITAR {editingItem.type}
+                            </h3>
+                            <button onClick={() => setEditingItem(null)} className="p-2 hover:bg-white/10 rounded-full">
+                                <X className="h-7 w-7" />
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-6 overflow-auto max-h-[70vh]">
+                            {editingItem.type === 'personal' && (
+                                <>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Nombre Completo</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                            value={editValue.nombreCompleto}
+                                            onChange={(e) => setEditValue({ ...editValue, nombreCompleto: e.target.value.toUpperCase() })}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">ID / Código</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                            value={editValue.claveRegistro}
+                                            onChange={(e) => setEditValue({ ...editValue, claveRegistro: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Mensaje Personalizado</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                            value={editValue.mensajePersonalizado}
+                                            onChange={(e) => setEditValue({ ...editValue, mensajePersonalizado: e.target.value })}
+                                        />
+                                    </div>
+                                </>
+                            )}
+
+                            {(editingItem.type === 'pausa' || editingItem.type === 'salida') && (
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Texto de Justificación</label>
+                                    <input
+                                        className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                        value={editValue.texto}
+                                        onChange={(e) => setEditValue({ ...editValue, texto: e.target.value })}
+                                    />
+                                </div>
+                            )}
+
+                            {editingItem.type === 'etapa' && (
+                                <>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Código</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                            value={editValue.codigo}
+                                            onChange={(e) => setEditValue({ ...editValue, codigo: e.target.value.toUpperCase() })}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Nombre</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                            value={editValue.nombre}
+                                            onChange={(e) => setEditValue({ ...editValue, nombre: e.target.value })}
+                                        />
+                                    </div>
+                                </>
+                            )}
+
+                            {editingItem.type === 'usuario' && (
+                                <>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Username</label>
+                                            <input
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                                value={editValue.username}
+                                                onChange={(e) => setEditValue({ ...editValue, username: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Password</label>
+                                            <input
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                                value={editValue.password}
+                                                onChange={(e) => setEditValue({ ...editValue, password: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Email</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                            value={editValue.email}
+                                            onChange={(e) => setEditValue({ ...editValue, email: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Rol</label>
+                                        <select
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                            value={editValue.rol}
+                                            onChange={(e) => setEditValue({ ...editValue, rol: e.target.value as UserRole })}
+                                        >
+                                            <option value="usuario">Usuario</option>
+                                            <option value="supervisor">Supervisor</option>
+                                            <option value="superadmin">Superadmin</option>
+                                        </select>
+                                    </div>
+                                </>
+                            )}
+
+                            <button
+                                onClick={handleSaveEdit}
+                                className="w-full bg-success-green text-black py-5 rounded-3xl font-black text-xl hover:bg-green-600 transition-all flex items-center justify-center gap-4 shadow-xl"
+                            >
+                                <Check className="h-6 w-6" /> GUARDAR CAMBIOS
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 }

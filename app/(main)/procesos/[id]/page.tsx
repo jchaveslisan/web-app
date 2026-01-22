@@ -88,7 +88,7 @@ export default function MonitoreoPage() {
     const [staffMessage, setStaffMessage] = useState<{ text: string, type: 'success' | 'error' | 'info' | 'exit' } | null>(null);
     const [showStaffTypeModal, setShowStaffTypeModal] = useState(false);
     const [pendingStaffMaestro, setPendingStaffMaestro] = useState<any>(null);
-    const [pendingExitLog, setPendingExitLog] = useState<{ id: string, nombre: string } | null>(null);
+    const [pendingExitLog, setPendingExitLog] = useState<{ id: string, nombre: string, mensaje?: string } | null>(null);
     const [showModalBulkExit, setShowModalBulkExit] = useState(false);
     const [calidadTimerStr, setCalidadTimerStr] = useState("00:00:00");
     const [pauseMoment, setPauseMoment] = useState<Date | null>(null);
@@ -258,7 +258,10 @@ export default function MonitoreoPage() {
                     await addEventoLog(id, 'Proceso Pausado Automáticamente', `Proceso pausado automáticamente al no quedar colaboradores activos`, 'SISTEMA', 'Sistema');
                 }
 
-                setStaffMessage({ text: `${pendingExitLog.nombre} - QUE DIOS LO ACOMPAÑE`, type: 'exit' });
+                setStaffMessage({
+                    text: pendingExitLog.mensaje || `${pendingExitLog.nombre} - QUE DIOS LO ACOMPAÑE`,
+                    type: 'exit'
+                });
                 setTimeout(() => setStaffMessage(null), 4000);
             } catch (error) {
                 console.error(error);
@@ -378,8 +381,8 @@ export default function MonitoreoPage() {
         }
     };
 
-    const handleSalidaColaborador = async (logId: string, nombre: string) => {
-        setPendingExitLog({ id: logId, nombre });
+    const handleSalidaColaborador = async (logId: string, nombre: string, mensaje?: string) => {
+        setPendingExitLog({ id: logId, nombre, mensaje });
         setModalJustificacion({ show: true, tipo: 'salida' });
     };
 
@@ -446,7 +449,7 @@ export default function MonitoreoPage() {
             if (logActivo) {
                 // YA ESTÁ -> ES UNA SALIDA
                 setStaffCode('');
-                handleSalidaColaborador(logActivo.id, maestro.nombreCompleto);
+                handleSalidaColaborador(logActivo.id, maestro.nombreCompleto, maestro.mensajePersonalizado);
             } else {
                 // NO ESTÁ -> ES UN INGRESO
                 // Pero primero verificar si está en OTRA línea
@@ -538,7 +541,10 @@ export default function MonitoreoPage() {
                 await addEventoLog(id, 'Proceso Reanudado Automáticamente', `Proceso reanudado al registrar colaborador después de pausa automática por falta de personal`, 'SISTEMA', 'Sistema');
             }
 
-            setStaffMessage({ text: `${maestroActual.nombreCompleto} - QUÉ MOP!`, type: 'success' });
+            setStaffMessage({
+                text: maestroActual.mensajePersonalizado || `${maestroActual.nombreCompleto} - QUÉ MOP!`,
+                type: 'success'
+            });
             setTimeout(() => setStaffMessage(null), 4000);
         } catch (error) {
             console.error(error);
