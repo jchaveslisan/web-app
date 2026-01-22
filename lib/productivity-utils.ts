@@ -36,64 +36,35 @@ export function calculateProductivity(proceso: Proceso, colaboradores: Colaborad
     let isTiempoExtra = false;
     let isGracePeriod = !!inicioPeriodoGracia;
 
-    // --- LÓGICA DE TIEMPO RESTANTE ---
-    
-    // Si tiene un tiempo guardado (pausado), usarlo como base
-    if ((proceso as any).tiempoRestanteAlPausar !== null && (proceso as any).tiempoRestanteAlPausar !== undefined) {
-        // Tiene un tiempo guardado: si está pausado, devolver ese valor
-        // Si está 'Iniciado' (reanudado), restar el tiempo que ha pasado desde la reanudación
-        const tiempoGuardado = (proceso as any).tiempoRestanteAlPausar;
-        
-        if (estado === 'Iniciado' && proceso.ultimoUpdate) {
-            // Reanudado: restar el tiempo transcurrido desde ultimoUpdate
-            const now = new Date();
-            const reanudeTime = (proceso.ultimoUpdate as any).toDate?.() || new Date(proceso.ultimoUpdate);
-            const elapsedSeconds = differenceInSeconds(now, reanudeTime);
-            segundosTotalesRestantes = Math.max(0, tiempoGuardado - elapsedSeconds);
-        } else {
-            // Pausado: devolver el tiempo guardado sin cambios
-            segundosTotalesRestantes = tiempoGuardado;
-        }
-        
-        // Verificar si es tiempo extra (negativo)
-        isTiempoExtra = tiempoGuardado < 0;
-        if (isTiempoExtra) {
-            segundosTotalesRestantes = Math.abs(segundosTotalesRestantes);
-        }
-        // Mantener el valor de isGracePeriod original para determinar color
-    } else {
-        // Sin tiempo guardado: cálculo normal
-        let nowRef = new Date();
-        const isPausado = estado === 'Pausado' || (proceso as any).pausadoPorFaltaDePersonal;
-        
-        if (isPausado && proceso.ultimoUpdate) {
-            nowRef = (proceso.ultimoUpdate as any).toDate?.() || new Date(proceso.ultimoUpdate);
-        } else if (estado === 'Finalizado' && proceso.horaFinReal) {
-            nowRef = (proceso.horaFinReal as any).toDate?.() || new Date(proceso.horaFinReal);
-        }
+    // --- LÓGICA DE TIEMPO RESTANTE DINÁMICA ---
+    let nowRef = new Date();
+    const isPausado = estado === 'Pausado' || (proceso as any).pausadoPorFaltaDePersonal;
 
-        if (isGracePeriod) {
-            // Lógica 2: Período de gracia fijo (15 minutos)
-            const inicioGracia = (inicioPeriodoGracia as any).toDate?.() || new Date(inicioPeriodoGracia);
-            const finGracia = addSeconds(inicioGracia, 15 * 60);
-            segundosTotalesRestantes = differenceInSeconds(finGracia, nowRef);
-        } else if (numColaboradores > 0 && (estado === 'Iniciado' || estado === 'Pausado' || estado === 'Finalizado')) {
-            // Lógica 4: Cálculo dinámico
-            if (velocidadEquipoMin > 0) {
-                const minutosTrabajoRestante = unidadesRestantes / velocidadEquipoMin;
+    if (isPausado && proceso.ultimoUpdate) {
+        nowRef = (proceso.ultimoUpdate as any).toDate?.() || new Date(proceso.ultimoUpdate);
+    } else if (estado === 'Finalizado' && proceso.horaFinReal) {
+        nowRef = (proceso.horaFinReal as any).toDate?.() || new Date(proceso.horaFinReal);
+    }
 
-                // Cálculo normal: se suman los minutos de trabajo y los 15 de gracia.
-                const segundosTrabajoRestante = minutosTrabajoRestante * 60;
-                const segundosGracia = 15 * 60;
-                segundosTotalesRestantes = segundosTrabajoRestante + segundosGracia;
-            }
+    if (isGracePeriod) {
+        // Lógica: Período de gracia fijo (15 minutos) desde que se activó
+        const inicioGracia = (inicioPeriodoGracia as any).toDate?.() || new Date(inicioPeriodoGracia);
+        const finGracia = addSeconds(inicioGracia, 15 * 60);
+        segundosTotalesRestantes = differenceInSeconds(finGracia, nowRef);
+    } else if (numColaboradores > 0 && (estado === 'Iniciado' || estado === 'Pausado' || estado === 'Finalizado')) {
+        // Lógica: Cálculo dinámico basado en velocidad actual del equipo
+        if (velocidadEquipoMin > 0) {
+            const minutosTrabajoRestante = unidadesRestantes / velocidadEquipoMin;
+            const segundosTrabajoRestante = minutosTrabajoRestante * 60;
+            const segundosGracia = 15 * 60;
+            segundosTotalesRestantes = segundosTrabajoRestante + segundosGracia;
         }
+    }
 
-        // Manejo de tiempo extra (negativo)
-        if (segundosTotalesRestantes < 0) {
-            isTiempoExtra = true;
-            segundosTotalesRestantes = Math.abs(segundosTotalesRestantes);
-        }
+    // Manejo de tiempo extra (negativo)
+    if (segundosTotalesRestantes < 0) {
+        isTiempoExtra = true;
+        segundosTotalesRestantes = Math.abs(segundosTotalesRestantes);
     }
 
     // Formatear string

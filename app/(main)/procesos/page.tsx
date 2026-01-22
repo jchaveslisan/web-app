@@ -156,43 +156,27 @@ export default function ProcesosPage() {
 
         let segundosTotalesRestantes = 0;
 
-        // Si tiene un tiempo guardado, usarlo como base
-        if ((proceso as any).tiempoRestanteAlPausar !== null && (proceso as any).tiempoRestanteAlPausar !== undefined) {
-            const tiempoGuardado = (proceso as any).tiempoRestanteAlPausar;
+        // Cálculo dinámico siempre
+        // Tiempo de referencia: si está pausado (incluyendo pausadoPorFaltaDePersonal), usar ultimoUpdate (momento de la pausa)
+        // Si está finalizado, usar horaFinReal. Si está en progreso, usar ahora.
+        let nowRef = new Date();
+        if ((estado === 'Pausado' || (proceso as any).pausadoPorFaltaDePersonal) && ultimoUpdate) {
+            nowRef = (ultimoUpdate as any).toDate?.() || new Date(ultimoUpdate);
+        } else if (estado === 'Finalizado' && horaFinReal) {
+            nowRef = (horaFinReal as any).toDate?.() || new Date(horaFinReal);
+        }
 
-            if (estado === 'Iniciado' && ultimoUpdate) {
-                // Reanudado: restar el tiempo transcurrido desde ultimoUpdate
-                const now = new Date();
-                const reanudeTime = (ultimoUpdate as any)?.toDate?.() || new Date(ultimoUpdate);
-                const elapsedSeconds = Math.max(0, differenceInSeconds(now, reanudeTime));
-                segundosTotalesRestantes = Math.max(0, tiempoGuardado - elapsedSeconds);
-            } else {
-                // Pausado: devolver el tiempo guardado sin cambios
-                segundosTotalesRestantes = tiempoGuardado;
-            }
-        } else {
-            // Sin tiempo guardado: cálculo normal
-            // Tiempo de referencia: si está pausado (incluyendo pausadoPorFaltaDePersonal), usar ultimoUpdate (momento de la pausa)
-            // Si está finalizado, usar horaFinReal. Si está en progreso, usar ahora.
-            let nowRef = new Date();
-            if ((estado === 'Pausado' || (proceso as any).pausadoPorFaltaDePersonal) && ultimoUpdate) {
-                nowRef = (ultimoUpdate as any).toDate?.() || new Date(ultimoUpdate);
-            } else if (estado === 'Finalizado' && horaFinReal) {
-                nowRef = (horaFinReal as any).toDate?.() || new Date(horaFinReal);
-            }
-
-            if (inicioPeriodoGracia) {
-                // Período de gracia: 15 minutos fijos desde inicioPeriodoGracia
-                const inicioGracia = (inicioPeriodoGracia as any).toDate?.() || new Date(inicioPeriodoGracia);
-                const finGracia = addSeconds(inicioGracia, 15 * 60);
-                segundosTotalesRestantes = differenceInSeconds(finGracia, nowRef);
-            } else if (velocidadEquipoMin > 0 && (estado === 'Iniciado' || estado === 'Pausado' || estado === 'Finalizado')) {
-                // Cálculo dinámico usando velocidadEquipoMin: trabajo restante / velocidad + 15 min de gracia
-                const minutosTrabajoRestante = unidadesRestantes / velocidadEquipoMin;
-                const segundosTrabajoRestante = minutosTrabajoRestante * 60;
-                const segundosGracia = 15 * 60;
-                segundosTotalesRestantes = segundosTrabajoRestante + segundosGracia;
-            }
+        if (inicioPeriodoGracia) {
+            // Período de gracia: 15 minutos fijos desde inicioPeriodoGracia
+            const inicioGracia = (inicioPeriodoGracia as any).toDate?.() || new Date(inicioPeriodoGracia);
+            const finGracia = addSeconds(inicioGracia, 15 * 60);
+            segundosTotalesRestantes = differenceInSeconds(finGracia, nowRef);
+        } else if (velocidadEquipoMin > 0 && (estado === 'Iniciado' || estado === 'Pausado' || estado === 'Finalizado')) {
+            // Cálculo dinámico usando velocidadEquipoMin: trabajo restante / velocidad + 15 min de gracia
+            const minutosTrabajoRestante = unidadesRestantes / velocidadEquipoMin;
+            const segundosTrabajoRestante = minutosTrabajoRestante * 60;
+            const segundosGracia = 15 * 60;
+            segundosTotalesRestantes = segundosTrabajoRestante + segundosGracia;
         }
 
         // Manejar tiempo extra (negativo)

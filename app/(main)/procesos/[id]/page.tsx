@@ -163,7 +163,6 @@ export default function MonitoreoPage() {
                 estado: 'Pausado',
                 trabajoCompletado: calculatedUnits,
                 ultimoUpdate: Timestamp.now(), // Snap del tiempo al pausar
-                tiempoRestanteAlPausar: tiempoRestanteAlPausar // Guardar el tiempo restante
             });
             await addEventoLog(id, `Proceso Pausado`, justificacion, "ESTADO", user?.username || 'sistema');
         } else if (modalJustificacion.tipo === 'salida' && pendingExitLog) {
@@ -172,21 +171,18 @@ export default function MonitoreoPage() {
                 await updateDoc(docRef, {
                     horaSalida: Timestamp.now()
                 });
-                // Al cambiar personal, sincronizamos las unidades calculadas
-                const updatesToProcess: any = { trabajoCompletado: calculatedUnits };
+                // Al cambiar personal, sincronizamos las unidades calculadas y el tiempo
+                const updatesToProcess: any = {
+                    trabajoCompletado: calculatedUnits,
+                    ultimoUpdate: Timestamp.now()
+                };
 
                 // Auto-pausar cuando no queda personal (independiente del tipo de proceso)
                 const personalRestante = colaboradores.filter(c => c.id !== pendingExitLog.id && !c.horaSalida).length;
                 const tipoActual = getTipoProcesoReal(proceso);
                 if (proceso.estado === 'Iniciado' && personalRestante === 0) {
-                    // Calcular el tiempo restante en el momento de la pausa automática
-                    const stats = calculateProductivity(proceso, colaboradores);
-                    const tiempoRestanteAlPausar = stats.segundosTotalesRestantes;
-
                     updatesToProcess.estado = 'Pausado';
-                    updatesToProcess.ultimoUpdate = Timestamp.now();
                     updatesToProcess.pausadoPorFaltaDePersonal = true; // Marcar como pausa automática
-                    updatesToProcess.tiempoRestanteAlPausar = tiempoRestanteAlPausar; // Guardar el tiempo restante
                 }
 
                 await updateProceso(id, updatesToProcess);
@@ -399,7 +395,9 @@ export default function MonitoreoPage() {
 
             // Auto-iniciar procesos anexos u 'otros' cuando se agrega el primer personal
             const tipoActual = getTipoProcesoReal(proceso);
-            if ((tipoActual === 'anexos' || tipoActual === 'otros') && proceso.estado === 'Registrado' && personalActivo === 0) {
+            const personalActivoPrev = colaboradores.filter(c => !c.horaSalida).length;
+
+            if ((tipoActual === 'anexos' || tipoActual === 'otros') && proceso.estado === 'Registrado' && personalActivoPrev === 0) {
                 const updates: any = {
                     estado: 'Iniciado',
                     ultimoUpdate: Timestamp.now()
@@ -409,15 +407,21 @@ export default function MonitoreoPage() {
                 }
                 await updateProceso(id, updates);
                 await addEventoLog(id, 'Proceso Iniciado Automáticamente', `Proceso ${tipoActual} iniciado al registrar primer colaborador`, 'SISTEMA', 'Sistema');
+            } else if (proceso.estado === 'Iniciado') {
+                // SI EL PROCESO YA ESTÁ INICIADO: Sincronizar unidades y tiempo ANTES de que el nuevo personal cambie la velocidad
+                // Esto evita el "salto" de tiempo que vio el usuario
+                await updateProceso(id, {
+                    trabajoCompletado: calculatedUnits,
+                    ultimoUpdate: Timestamp.now()
+                });
             }
 
             // Auto-reanudar si está pausado y no hay personal activo (fue pausado automáticamente por falta de personal)
-            if (proceso.estado === 'Pausado' && personalActivo === 0 && (proceso as any).pausadoPorFaltaDePersonal) {
+            if (proceso.estado === 'Pausado' && personalActivoPrev === 0 && (proceso as any).pausadoPorFaltaDePersonal) {
                 await updateProceso(id, {
                     estado: 'Iniciado',
                     ultimoUpdate: Timestamp.now(),
                     pausadoPorFaltaDePersonal: false // Limpiar el flag
-                    // NO borrar tiempoRestanteAlPausar: se mantiene como base
                 });
                 await addEventoLog(id, 'Proceso Reanudado Automáticamente', `Proceso reanudado al registrar colaborador después de pausa automática por falta de personal`, 'SISTEMA', 'Sistema');
             }
