@@ -36,7 +36,7 @@ export const signIn = async (email: string, pass: string) => {
             id: result.user.uid,
             username: result.user.displayName || email.split('@')[0],
             email: email,
-            rol: isFirstUser ? 'superadmin' : 'operador',
+            rol: isFirstUser ? 'superadmin' : 'usuario',
             activo: isFirstUser ? true : false,
             creadoEn: new Date().toISOString()
         };
