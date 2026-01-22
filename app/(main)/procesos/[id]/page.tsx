@@ -58,10 +58,13 @@ export default function MonitoreoPage() {
     const { proceso, colaboradores, eventos, loading } = useProcesoRealtime(id);
     const user = useAuthStore(state => state.user);
 
-    // Validación de acceso por Rol (Usuario solo ve los suyos)
+    // Validación de acceso por Rol (Usuario solo ve los suyos + compartidos)
     useEffect(() => {
         if (!loading && proceso && user?.rol === 'usuario') {
-            if (proceso.registradoPorUsuario !== user.username) {
+            const esMio = proceso.registradoPorUsuario === user.username;
+            const compartidoConmigo = (proceso as any).visiblePara?.includes(user.username);
+
+            if (!esMio && !compartidoConmigo) {
                 router.push('/procesos');
             }
         }
@@ -259,7 +262,7 @@ export default function MonitoreoPage() {
                 }
 
                 setStaffMessage({
-                    text: pendingExitLog.mensaje || `${pendingExitLog.nombre} - QUE DIOS LO ACOMPAÑE`,
+                    text: pendingExitLog.mensaje || `Salida Registrada - ${pendingExitLog.nombre}`,
                     type: 'exit'
                 });
                 setTimeout(() => setStaffMessage(null), 4000);
@@ -542,7 +545,7 @@ export default function MonitoreoPage() {
             }
 
             setStaffMessage({
-                text: maestroActual.mensajeEntrada || `${maestroActual.nombreCompleto} - QUÉ MOP!`,
+                text: maestroActual.mensajeEntrada || `Ingreso Registrado - ${maestroActual.nombreCompleto}`,
                 type: 'success'
             });
             setTimeout(() => setStaffMessage(null), 4000);

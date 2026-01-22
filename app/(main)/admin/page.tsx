@@ -355,7 +355,7 @@ export default function AdminPage() {
                                                 className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary-blue"
                                                 value={newMensajeEntrada}
                                                 onChange={(e) => setNewMensajeEntrada(e.target.value)}
-                                                placeholder="Ej: ¡Buen turno crack!"
+                                                placeholder="Ej: ¡Buen trabajo hoy!"
                                             />
                                         </div>
                                         <div>
@@ -364,7 +364,7 @@ export default function AdminPage() {
                                                 className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary-blue"
                                                 value={newMensajeSalida}
                                                 onChange={(e) => setNewMensajeSalida(e.target.value)}
-                                                placeholder="Ej: ¡A descansar mopa!"
+                                                placeholder="Ej: ¡Hasta mañana!"
                                             />
                                         </div>
                                     </div>
