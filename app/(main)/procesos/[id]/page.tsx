@@ -79,6 +79,7 @@ export default function MonitoreoPage() {
     const [pendingExitLog, setPendingExitLog] = useState<{ id: string, nombre: string } | null>(null);
     const [showModalBulkExit, setShowModalBulkExit] = useState(false);
     const [calidadTimerStr, setCalidadTimerStr] = useState("00:00:00");
+    const [pauseMoment, setPauseMoment] = useState<Date | null>(null);
 
     // Sincronizar unidades calculadas con el valor de la base de datos cuando cambia
     useEffect(() => {
@@ -128,11 +129,19 @@ export default function MonitoreoPage() {
 
         const update = () => {
             const colabs = colaboradores || [];
+            const now = new Date();
 
             // Determinar si el proceso está EFECTIVAMENTE pausado (localmente)
             const isActuallyPaused = (proceso.estado !== 'Iniciado' && proceso.estado !== 'Registrado') ||
                 (proceso as any).pausadoPorFaltaDePersonal ||
                 (modalJustificacion.show && modalJustificacion.tipo === 'pausa');
+
+            // Reference time para los cálculos de productividad
+            // Si el modal está abierto, congelamos visualmente en pauseMoment
+            // Si está pausado en DB, calculateProductivity usará proceso.ultimoUpdate por defecto
+            const effectiveNow = (modalJustificacion.show && modalJustificacion.tipo === 'pausa' && pauseMoment)
+                ? pauseMoment
+                : now;
 
             const latestProceso: any = {
                 ...proceso,
@@ -140,7 +149,7 @@ export default function MonitoreoPage() {
                 estado: isActuallyPaused ? 'Pausado' : proceso.estado
             };
 
-            const newStats = calculateProductivity(latestProceso, colabs);
+            const newStats = calculateProductivity(latestProceso, colabs, effectiveNow);
             setStats(newStats);
 
             // Reloj de Setup (usa diferencia de tiempo real)
@@ -179,22 +188,24 @@ export default function MonitoreoPage() {
         update();
         const timer = setInterval(update, 1000);
         return () => clearInterval(timer);
-    }, [proceso, colaboradores, calculatedUnits, modalJustificacion.show]);
+    }, [proceso, colaboradores, calculatedUnits, modalJustificacion.show, pauseMoment]);
 
     const handleConfirmJustificacion = async (justificacion: string) => {
         if (!proceso) return;
 
         if (modalJustificacion.tipo === 'pausa') {
-            // Calcular el tiempo restante en el momento de la pausa
-            const stats = calculateProductivity(proceso, colaboradores);
-            const tiempoRestanteAlPausar = stats.segundosTotalesRestantes;
+            const now = new Date();
+            // Usar el momento en que se abrió el modal para que el 'ultimoUpdate' en DB
+            // coincida perfectamente con el momento en que se congeló el reloj visualmente
+            const effectivePauseTime = pauseMoment || now;
 
             await updateProceso(id, {
                 estado: 'Pausado',
                 trabajoCompletado: calculatedUnits,
-                ultimoUpdate: Timestamp.now(), // Snap del tiempo al pausar
+                ultimoUpdate: Timestamp.fromDate(effectivePauseTime),
             });
             await addEventoLog(id, `Proceso Pausado`, justificacion, "ESTADO", user?.username || 'sistema');
+            setPauseMoment(null);
         } else if (modalJustificacion.tipo === 'salida' && pendingExitLog) {
             try {
                 const docRef = doc(db, 'colaboradores_log', pendingExitLog.id);
@@ -231,6 +242,7 @@ export default function MonitoreoPage() {
         }
 
         setModalJustificacion({ show: false, tipo: 'pausa' });
+        setPauseMoment(null);
     };
 
     const handleSetupAction = async (action: 'start' | 'pause' | 'finish') => {
@@ -299,15 +311,29 @@ export default function MonitoreoPage() {
         if (!proceso || proceso.estado === 'Finalizado') return;
 
         if (proceso.estado === 'Iniciado') {
+            setPauseMoment(new Date());
             setModalJustificacion({ show: true, tipo: 'pausa' });
         } else {
+            const now = new Date();
             const updates: any = {
                 estado: 'Iniciado',
-                ultimoUpdate: Timestamp.now() // Snap del tiempo al reanudar
-                // NO borrar tiempoRestanteAlPausar: se mantiene como base
+                ultimoUpdate: Timestamp.fromDate(now)
             };
+
+            // COMPENSACIÓN DE TIEMPO DE GRACIA:
+            // Si el proceso estaba en periodo de gracia, debemos mover el inicio de dicho periodo
+            // hacia adelante tanto tiempo como el proceso estuvo pausado.
+            if (proceso.inicioPeriodoGracia && proceso.ultimoUpdate) {
+                const pauseStart = (proceso.ultimoUpdate as any).toDate?.() || new Date(proceso.ultimoUpdate);
+                const pauseDuration = differenceInSeconds(now, pauseStart);
+                if (pauseDuration > 0) {
+                    const oldStart = (proceso.inicioPeriodoGracia as any).toDate?.() || new Date(proceso.inicioPeriodoGracia);
+                    updates.inicioPeriodoGracia = Timestamp.fromDate(addSeconds(oldStart, pauseDuration));
+                }
+            }
+
             if (!proceso.horaInicioReal) {
-                updates.horaInicioReal = Timestamp.now();
+                updates.horaInicioReal = Timestamp.fromDate(now);
             }
             await updateProceso(id, updates);
             await addEventoLog(id, `Proceso Reanudado`, `Reinicio de operación manual`, "ESTADO", user?.username || 'sistema');
@@ -477,11 +503,24 @@ export default function MonitoreoPage() {
 
             // Auto-reanudar si está pausado y no hay personal activo (fue pausado automáticamente por falta de personal)
             if (proceso.estado === 'Pausado' && personalActivoPrev === 0 && (proceso as any).pausadoPorFaltaDePersonal) {
-                await updateProceso(id, {
+                const now = new Date();
+                const updates: any = {
                     estado: 'Iniciado',
-                    ultimoUpdate: Timestamp.now(),
+                    ultimoUpdate: Timestamp.fromDate(now),
                     pausadoPorFaltaDePersonal: false // Limpiar el flag
-                });
+                };
+
+                // COMPENSACIÓN DE TIEMPO DE GRACIA (Igual que en handleToggleEstado)
+                if (proceso.inicioPeriodoGracia && proceso.ultimoUpdate) {
+                    const pauseStart = (proceso.ultimoUpdate as any).toDate?.() || new Date(proceso.ultimoUpdate);
+                    const pauseDuration = differenceInSeconds(now, pauseStart);
+                    if (pauseDuration > 0) {
+                        const oldStart = (proceso.inicioPeriodoGracia as any).toDate?.() || new Date(proceso.inicioPeriodoGracia);
+                        updates.inicioPeriodoGracia = Timestamp.fromDate(addSeconds(oldStart, pauseDuration));
+                    }
+                }
+
+                await updateProceso(id, updates);
                 await addEventoLog(id, 'Proceso Reanudado Automáticamente', `Proceso reanudado al registrar colaborador después de pausa automática por falta de personal`, 'SISTEMA', 'Sistema');
             }
 

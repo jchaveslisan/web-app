@@ -12,7 +12,7 @@ export interface ProductivityStats {
     numColaboradores: number;
 }
 
-export function calculateProductivity(proceso: Proceso, colaboradores: ColaboradorLog[]): ProductivityStats {
+export function calculateProductivity(proceso: Proceso, colaboradores: ColaboradorLog[], localNow?: Date): ProductivityStats {
     const {
         cantidadProducir,
         trabajoCompletado,
@@ -37,7 +37,7 @@ export function calculateProductivity(proceso: Proceso, colaboradores: Colaborad
     let isGracePeriod = !!inicioPeriodoGracia;
 
     // --- LÓGICA DE TIEMPO RESTANTE DINÁMICA ---
-    let nowRef = new Date();
+    let nowRef = localNow || new Date();
     const isPausado = estado === 'Pausado' || (proceso as any).pausadoPorFaltaDePersonal;
 
     if (isPausado && proceso.ultimoUpdate) {
