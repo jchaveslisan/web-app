@@ -671,7 +671,7 @@ export default function MonitoreoPage() {
                             )}
 
                             {/* Production Buttons */}
-                            {(!proceso.contabilizaSetup || proceso.setupEstado === 'finalizado') && (getTipoProcesoReal(proceso) !== 'anexos' && getTipoProcesoReal(proceso) !== 'otros') && (
+                            {(!proceso.contabilizaSetup || proceso.setupEstado === 'finalizado') && getTipoProcesoReal(proceso) !== 'anexos' && (
                                 <>
                                     {proceso.estado !== 'Finalizado' && (
                                         (proceso as any).pausadoPorFaltaDePersonal ? (
@@ -699,7 +699,7 @@ export default function MonitoreoPage() {
                                     )}
                                     {proceso.estado !== 'Finalizado' && (
                                         <button
-                                            className="w-full sm:w-auto bg-accent-purple/10 hover:bg-accent-purple text-accent-purple border border-accent-purple/20 px-8 md:px-12 py-4 md:py-5 rounded-3xl font-black text-lg md:text-xl flex items-center justify-center gap-4 transition-all"
+                                            className="w-full sm:w-auto bg-accent-purple/10 hover:bg-accent-purple hover:text-black text-accent-purple border border-accent-purple/20 px-8 md:px-12 py-4 md:py-5 rounded-3xl font-black text-lg md:text-xl flex items-center justify-center gap-4 transition-all"
                                             onClick={() => handleCalidadAction(proceso.calidadEstado === 'aprobado' ? 'reset' : 'call')}
                                         >
                                             <ShieldCheck className="h-6 w-6 md:h-7 md:w-7" /> {proceso.calidadEstado === 'aprobado' ? 'CALIDAD (LISTO)' : 'CALIDAD'}
@@ -707,7 +707,7 @@ export default function MonitoreoPage() {
                                     )}
                                     {proceso.estado !== 'Finalizado' && (
                                         <button
-                                            className="w-full sm:w-auto bg-danger-red/10 hover:bg-danger-red text-danger-red border border-danger-red/20 px-8 md:px-12 py-4 md:py-5 rounded-3xl font-black text-lg md:text-xl flex items-center justify-center gap-4 transition-all"
+                                            className="w-full sm:w-auto bg-danger-red/10 hover:bg-danger-red hover:text-white text-danger-red border border-danger-red/20 px-8 md:px-12 py-4 md:py-5 rounded-3xl font-black text-lg md:text-xl flex items-center justify-center gap-4 transition-all"
                                             onClick={handleFinalizarProceso}
                                         >
                                             <Square className="h-6 w-6 md:h-7 md:w-7 fill-current" /> TERMINAR

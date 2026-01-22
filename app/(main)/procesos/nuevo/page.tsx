@@ -192,11 +192,13 @@ export default function NuevoProcesoPage() {
                                                 className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary-blue/50 transition-all font-bold text-white"
                                             >
                                                 <option value="" className="bg-black text-white">Seleccionar etapa...</option>
-                                                {etapas.map(etapa => (
-                                                    <option key={etapa.id} value={etapa.codigo} className="bg-black text-white">
-                                                        {etapa.codigo} - {etapa.nombre}
-                                                    </option>
-                                                ))}
+                                                {etapas
+                                                    .filter(e => !e.tiposProceso || e.tiposProceso.includes('empaque'))
+                                                    .map(etapa => (
+                                                        <option key={etapa.id} value={etapa.codigo} className="bg-black text-white">
+                                                            {etapa.codigo} - {etapa.nombre}
+                                                        </option>
+                                                    ))}
                                             </select>
                                         </div>
                                     </div>
@@ -284,12 +286,25 @@ export default function NuevoProcesoPage() {
                                         <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Etapa</label>
                                         <select
                                             {...register('etapa')}
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-warning-yellow/50 transition-all font-bold"
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-warning-yellow/50 transition-all font-bold text-white"
                                         >
-                                            <option value="EMP">EMP</option>
-                                            <option value="FAB">FAB</option>
-                                            <option value="SUB">SUB</option>
-                                            <option value="GRAN">GRAN</option>
+                                            <option value="" className="bg-black text-white">Seleccionar etapa...</option>
+                                            {etapas
+                                                .filter(e => e.tiposProceso?.includes('otros'))
+                                                .map(etapa => (
+                                                    <option key={etapa.id} value={etapa.codigo} className="bg-black text-white">
+                                                        {etapa.codigo} - {etapa.nombre}
+                                                    </option>
+                                                ))}
+                                            {/* Si no hay etapas específicas para 'otros', mostrar las defaults */}
+                                            {etapas.filter(e => e.tiposProceso?.includes('otros')).length === 0 && (
+                                                <>
+                                                    <option value="EMP" className="bg-black text-white">EMP - Empaque</option>
+                                                    <option value="FAB" className="bg-black text-white">FAB - Fabricación</option>
+                                                    <option value="SUB" className="bg-black text-white">SUB - Subempaque</option>
+                                                    <option value="GRAN" className="bg-black text-white">GRAN - Granel</option>
+                                                </>
+                                            )}
                                         </select>
                                     </div>
                                 </div>

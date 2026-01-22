@@ -89,5 +89,6 @@ export interface Etapa {
     codigo: string;
     nombre: string;
     activo: boolean;
+    tiposProceso?: TipoProceso[];
 }
 

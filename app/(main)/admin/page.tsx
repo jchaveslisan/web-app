@@ -32,6 +32,7 @@ export default function AdminPage() {
     const [newJustificacion, setNewJustificacion] = useState('');
     const [newEtapaCodigo, setNewEtapaCodigo] = useState('');
     const [newEtapaNombre, setNewEtapaNombre] = useState('');
+    const [newEtapaTipos, setNewEtapaTipos] = useState<string[]>(['empaque', 'otros', 'anexos']);
     const router = useRouter();
 
     // Cargar colaboradores
@@ -122,10 +123,12 @@ export default function AdminPage() {
             await addDoc(collection(db, 'maestro_etapas'), {
                 codigo: newEtapaCodigo.toUpperCase(),
                 nombre: newEtapaNombre,
-                activo: true
+                activo: true,
+                tiposProceso: newEtapaTipos
             });
             setNewEtapaCodigo('');
             setNewEtapaNombre('');
+            setNewEtapaTipos(['empaque', 'otros', 'anexos']);
             setShowForm(false);
         } catch (error) {
             console.error(error);
@@ -497,8 +500,42 @@ export default function AdminPage() {
                                         />
                                     </div>
                                 </div>
-                                <button type="submit" className="mt-6 w-full bg-success-green text-black font-black py-4 rounded-xl flex items-center justify-center gap-2">
-                                    <Check className="h-6 w-6" /> GUARDAR
+
+                                <div className="mt-6">
+                                    <label className="block text-xs font-black text-gray-500 uppercase mb-3">Visible en procesos de tipo:</label>
+                                    <div className="flex flex-wrap gap-4">
+                                        {[
+                                            { id: 'empaque', label: 'Empaque' },
+                                            { id: 'otros', label: 'Otros' },
+                                            { id: 'anexos', label: 'Anexos' }
+                                        ].map(tipo => (
+                                            <label key={tipo.id} className="flex items-center gap-2 cursor-pointer group">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={newEtapaTipos.includes(tipo.id)}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setNewEtapaTipos([...newEtapaTipos, tipo.id]);
+                                                        } else {
+                                                            setNewEtapaTipos(newEtapaTipos.filter(t => t !== tipo.id));
+                                                        }
+                                                    }}
+                                                    className="hidden"
+                                                />
+                                                <div className={cn(
+                                                    "w-5 h-5 rounded border-2 flex items-center justify-center transition-all",
+                                                    newEtapaTipos.includes(tipo.id) ? "bg-accent-purple border-accent-purple" : "border-white/20 group-hover:border-white/40"
+                                                )}>
+                                                    {newEtapaTipos.includes(tipo.id) && <Check className="h-3 w-3 text-white" />}
+                                                </div>
+                                                <span className="text-sm font-bold">{tipo.label}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <button type="submit" className="mt-8 w-full bg-success-green text-black font-black py-4 rounded-xl flex items-center justify-center gap-2">
+                                    <Check className="h-6 w-6" /> GUARDAR ETAPA
                                 </button>
                             </form>
                         )}
@@ -509,6 +546,7 @@ export default function AdminPage() {
                                     <tr className="bg-white/5 border-b border-white/10">
                                         <th className="p-5 text-xs font-black uppercase text-gray-500">Código</th>
                                         <th className="p-5 text-xs font-black uppercase text-gray-500">Nombre</th>
+                                        <th className="p-5 text-xs font-black uppercase text-gray-500">Tipos de Proceso</th>
                                         <th className="p-5 text-xs font-black uppercase text-gray-500">Estado</th>
                                         <th className="p-5 text-right text-xs font-black uppercase text-gray-500">Acciones</th>
                                     </tr>
@@ -518,6 +556,15 @@ export default function AdminPage() {
                                         <tr key={etapa.id} className="hover:bg-white/[0.02] transition-colors">
                                             <td className="p-5 font-bold uppercase">{etapa.codigo}</td>
                                             <td className="p-5">{etapa.nombre}</td>
+                                            <td className="p-5">
+                                                <div className="flex flex-wrap gap-1">
+                                                    {(etapa as any).tiposProceso?.map((t: string) => (
+                                                        <span key={t} className="text-[8px] font-black px-2 py-0.5 bg-white/5 rounded border border-white/10 uppercase tracking-tighter">
+                                                            {t}
+                                                        </span>
+                                                    )) || <span className="text-[8px] text-gray-600">TODOS</span>}
+                                                </div>
+                                            </td>
                                             <td className="p-5">
                                                 <button
                                                     onClick={() => handleToggleActivo(etapa.id, etapa.activo, 'maestro_etapas')}
