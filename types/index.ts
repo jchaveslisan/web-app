@@ -61,6 +61,7 @@ export interface Proceso {
     reprocesoEstado?: 'ninguno' | 'en curso' | 'finalizado';
     reprocesoStartTime?: any;
     tiempoReprocesoSegundos?: number;
+    ultimaJustificacionPausa?: string;
 }
 
 export interface ColaboradorLog {

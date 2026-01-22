@@ -63,7 +63,7 @@ export default function NuevoProcesoPage() {
 
             await addEventoLog(procesoId, "Proceso Registrado", mensajeLog, "REGISTRO PROCESO", user?.username || 'sistema');
 
-            router.push('/procesos');
+            router.push(`/procesos/${procesoId}`);
         } catch (error) {
             console.error('Error al crear proceso:', error);
             alert('Hubo un error al guardar el proceso en Firebase');

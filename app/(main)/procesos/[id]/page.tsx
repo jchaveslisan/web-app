@@ -240,6 +240,7 @@ export default function MonitoreoPage() {
                 estado: 'Pausado',
                 trabajoCompletado: calculatedUnits,
                 ultimoUpdate: Timestamp.fromDate(effectivePauseTime),
+                ultimaJustificacionPausa: justificacion
             });
             await addEventoLog(id, `Proceso Pausado`, justificacion, "ESTADO", user?.username || 'sistema');
             setPauseMoment(null);
@@ -378,7 +379,8 @@ export default function MonitoreoPage() {
             const now = new Date();
             const updates: any = {
                 estado: 'Iniciado',
-                ultimoUpdate: Timestamp.fromDate(now)
+                ultimoUpdate: Timestamp.fromDate(now),
+                ultimaJustificacionPausa: null
             };
 
             if (proceso.inicioPeriodoGracia && proceso.ultimoUpdate) {
@@ -827,7 +829,7 @@ export default function MonitoreoPage() {
                                             <Square className="h-6 w-6 md:h-7 md:w-7 fill-current" /> TERMINAR
                                         </button>
                                     )}
-                                    {proceso.estado === 'Finalizado' && (
+                                    {(proceso.reprocesoEstado === 'en curso' || (proceso.estado === 'Pausado' && (proceso as any).ultimaJustificacionPausa === 'REPROCESO')) && (
                                         <button
                                             className="w-full sm:w-auto bg-amber-500/10 hover:bg-amber-500 hover:text-black text-amber-500 border border-amber-500/20 px-8 md:px-12 py-4 md:py-5 rounded-3xl font-black text-lg md:text-xl flex items-center justify-center gap-4 transition-all shadow-lg shadow-amber-500/10"
                                             onClick={() => {
