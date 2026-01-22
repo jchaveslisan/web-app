@@ -44,7 +44,8 @@ export default function AdminPage() {
     const [newEmail, setNewEmail] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [newRole, setNewRole] = useState<UserRole>('usuario');
-    const [newMensaje, setNewMensaje] = useState('');
+    const [newMensajeEntrada, setNewMensajeEntrada] = useState('');
+    const [newMensajeSalida, setNewMensajeSalida] = useState('');
 
     // For editing
     const [editValue, setEditValue] = useState<any>({});
@@ -113,12 +114,14 @@ export default function AdminPage() {
             await addDoc(collection(db, 'maestro_colaboradores'), {
                 nombreCompleto: newNombre.toUpperCase(),
                 claveRegistro: newID,
-                mensajePersonalizado: newMensaje || null,
+                mensajeEntrada: newMensajeEntrada || null,
+                mensajeSalida: newMensajeSalida || null,
                 activo: true
             });
             setNewNombre('');
             setNewID('');
-            setNewMensaje('');
+            setNewMensajeEntrada('');
+            setNewMensajeSalida('');
             setShowForm(false);
         } catch (error) {
             console.error(error);
@@ -345,14 +348,25 @@ export default function AdminPage() {
                                             placeholder="Ej: 887766"
                                         />
                                     </div>
-                                    <div className="md:col-span-2">
-                                        <label className="block text-xs font-black text-gray-500 uppercase mb-2">Mensaje Personalizado (Ingreso/Salida)</label>
-                                        <input
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary-blue"
-                                            value={newMensaje}
-                                            onChange={(e) => setNewMensaje(e.target.value)}
-                                            placeholder="Ej: ¡Buen turno crack! / ¡A descansar mopa!"
-                                        />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:col-span-2">
+                                        <div>
+                                            <label className="block text-xs font-black text-gray-500 uppercase mb-2">Mensaje Personalizado (Ingreso)</label>
+                                            <input
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary-blue"
+                                                value={newMensajeEntrada}
+                                                onChange={(e) => setNewMensajeEntrada(e.target.value)}
+                                                placeholder="Ej: ¡Buen turno crack!"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-black text-gray-500 uppercase mb-2">Mensaje Personalizado (Salida)</label>
+                                            <input
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary-blue"
+                                                value={newMensajeSalida}
+                                                onChange={(e) => setNewMensajeSalida(e.target.value)}
+                                                placeholder="Ej: ¡A descansar mopa!"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                                 <button type="submit" className="mt-6 w-full bg-success-green text-black font-black py-4 rounded-xl flex items-center justify-center gap-2">
@@ -394,7 +408,8 @@ export default function AdminPage() {
                                                         setEditValue({
                                                             nombreCompleto: colab.nombreCompleto,
                                                             claveRegistro: colab.claveRegistro,
-                                                            mensajePersonalizado: colab.mensajePersonalizado || ''
+                                                            mensajeEntrada: colab.mensajeEntrada || '',
+                                                            mensajeSalida: colab.mensajeSalida || ''
                                                         });
                                                     }}
                                                     className="p-2 hover:bg-white/10 text-gray-400 rounded-lg transition-all"
@@ -870,13 +885,23 @@ export default function AdminPage() {
                                             onChange={(e) => setEditValue({ ...editValue, claveRegistro: e.target.value })}
                                         />
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Mensaje Personalizado</label>
-                                        <input
-                                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
-                                            value={editValue.mensajePersonalizado}
-                                            onChange={(e) => setEditValue({ ...editValue, mensajePersonalizado: e.target.value })}
-                                        />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Mensaje Ingreso</label>
+                                            <input
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                                value={editValue.mensajeEntrada}
+                                                onChange={(e) => setEditValue({ ...editValue, mensajeEntrada: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Mensaje Salida</label>
+                                            <input
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                                value={editValue.mensajeSalida}
+                                                onChange={(e) => setEditValue({ ...editValue, mensajeSalida: e.target.value })}
+                                            />
+                                        </div>
                                     </div>
                                 </>
                             )}

@@ -449,7 +449,7 @@ export default function MonitoreoPage() {
             if (logActivo) {
                 // YA ESTÁ -> ES UNA SALIDA
                 setStaffCode('');
-                handleSalidaColaborador(logActivo.id, maestro.nombreCompleto, maestro.mensajePersonalizado);
+                handleSalidaColaborador(logActivo.id, maestro.nombreCompleto, maestro.mensajeSalida);
             } else {
                 // NO ESTÁ -> ES UN INGRESO
                 // Pero primero verificar si está en OTRA línea
@@ -542,7 +542,7 @@ export default function MonitoreoPage() {
             }
 
             setStaffMessage({
-                text: maestroActual.mensajePersonalizado || `${maestroActual.nombreCompleto} - QUÉ MOP!`,
+                text: maestroActual.mensajeEntrada || `${maestroActual.nombreCompleto} - QUÉ MOP!`,
                 type: 'success'
             });
             setTimeout(() => setStaffMessage(null), 4000);

@@ -14,7 +14,8 @@ export interface ColaboradorMaestro {
     id: string;
     claveRegistro: string;
     nombreCompleto: string;
-    mensajePersonalizado?: string;
+    mensajeEntrada?: string;
+    mensajeSalida?: string;
     activo: boolean;
 }
 
@@ -52,6 +53,7 @@ export interface Proceso {
     ultimoUpdate?: any; // Firestore Timestamp
     trabajoCompletadoTeorico?: number;
     pausadoPorFaltaDePersonal?: boolean;
+    visiblePara?: string[]; // IDs o Usernames de usuarios con acceso manual
     calidadEstado?: 'ninguno' | 'esperando' | 'inspeccion' | 'aprobado';
     calidadLlamadaEn?: any;
     calidadLlegadaEn?: any;

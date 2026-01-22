@@ -12,15 +12,20 @@ import {
     Pause,
     CheckCircle2,
     Clock,
-    ChevronDown
+    ChevronDown,
+    Share2,
+    Check,
+    X,
+    Users as UsersIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Proceso, ProcesoEstado } from '@/types';
 import { useProcesos } from '@/hooks/useProcesos';
 import { useAuthStore } from '@/lib/auth-service';
 import { differenceInSeconds, addSeconds } from 'date-fns';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { User as SystemUser } from '@/types';
 
 
 export default function ProcesosPage() {
@@ -36,6 +41,11 @@ export default function ProcesosPage() {
     const { procesos, loading } = useProcesos();
     const user = useAuthStore(state => state.user);
     const router = useRouter();
+
+    // Sharing state
+    const [sharingProceso, setSharingProceso] = useState<Proceso | null>(null);
+    const [allUsers, setAllUsers] = useState<SystemUser[]>([]);
+    const [isSavingShare, setIsSavingShare] = useState(false);
 
     // Re-renderizar cada segundo para actualizar temporizador y unidades
     useEffect(() => {
@@ -70,6 +80,42 @@ export default function ProcesosPage() {
         };
     }, [procesos]);
 
+    // Fetch all users for sharing
+    useEffect(() => {
+        if (!sharingProceso) return;
+
+        const fetchUsers = async () => {
+            const q = query(collection(db, 'usuarios'), where('activo', '==', true));
+            const snap = await getDocs(q);
+            setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() } as SystemUser)));
+        };
+        fetchUsers();
+    }, [sharingProceso]);
+
+    const handleToggleUserVisibility = async (targetUsername: string) => {
+        if (!sharingProceso) return;
+        setIsSavingShare(true);
+        try {
+            const currentVisible = sharingProceso.visiblePara || [];
+            const isVisible = currentVisible.includes(targetUsername);
+
+            const newVisible = isVisible
+                ? currentVisible.filter(u => u !== targetUsername)
+                : [...currentVisible, targetUsername];
+
+            await updateDoc(doc(db, 'procesos', sharingProceso.id), {
+                visiblePara: newVisible
+            });
+
+            // Local update for immediate feedback
+            setSharingProceso({ ...sharingProceso, visiblePara: newVisible });
+        } catch (error) {
+            console.error("Error updating visibility:", error);
+        } finally {
+            setIsSavingShare(false);
+        }
+    };
+
     const toggleState = (estado: ProcesoEstado) => {
         setExpandedStates(prev => ({
             ...prev,
@@ -78,9 +124,12 @@ export default function ProcesosPage() {
     };
 
     const filteredProcesos = procesos.filter(p => {
-        // 1. Filtro por Rol: Usuario solo ve los suyos
+        // 1. Filtro por Rol: Usuario solo ve los suyos + compartidos. 
+        // Superadmin y Supervisor ven TODOS.
         if (user?.rol === 'usuario') {
-            if (p.registradoPorUsuario !== user.username) return false;
+            const esMio = p.registradoPorUsuario === user.username;
+            const compartidoConmigo = p.visiblePara?.includes(user.username);
+            if (!esMio && !compartidoConmigo) return false;
         }
 
         // 2. Filtro por búsqueda
@@ -420,7 +469,16 @@ export default function ProcesosPage() {
                                                                 </span>
                                                             </div>
                                                         </td>
-                                                        <td className="p-5 text-right">
+                                                        <td className="p-5 text-right flex items-center justify-end gap-2">
+                                                            {['superadmin', 'supervisor'].includes(user?.rol || '') && (
+                                                                <button
+                                                                    onClick={() => setSharingProceso(proceso)}
+                                                                    className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 group transition-all"
+                                                                    title="Compartir visibilidad"
+                                                                >
+                                                                    <Share2 className="h-5 w-5 group-hover:text-primary-blue" />
+                                                                </button>
+                                                            )}
                                                             <button
                                                                 onClick={() => router.push(`/procesos/${proceso.id}`)}
                                                                 className="bg-primary-blue/10 hover:bg-primary-blue text-primary-blue hover:text-white px-4 py-2 rounded-lg text-sm font-bold transition-all border border-primary-blue/20"
@@ -444,6 +502,70 @@ export default function ProcesosPage() {
                         );
                     })}
                 </div>
+                {/* MODAL DE COMPARTIR VISIBILIDAD */}
+                {sharingProceso && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+                        <div className="glass w-full max-w-md rounded-[2.5rem] overflow-hidden flex flex-col border-white/10 shadow-2xl animate-in zoom-in duration-300">
+                            <div className="p-8 border-b border-white/10 flex items-center justify-between bg-white/5">
+                                <h3 className="text-xl font-black uppercase flex items-center gap-3">
+                                    <Share2 className="h-6 w-6 text-primary-blue" /> COMPARTIR PROCESO
+                                </h3>
+                                <button onClick={() => setSharingProceso(null)} className="p-2 hover:bg-white/10 rounded-full">
+                                    <X className="h-6 w-6" />
+                                </button>
+                            </div>
+                            <div className="p-8 space-y-4">
+                                <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">PROCESO SELECCIONADO</p>
+                                    <p className="font-bold text-white">{sharingProceso.ordenProduccion} - {sharingProceso.producto}</p>
+                                </div>
+
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mt-6">Seleccione los usuarios que pueden ver este proceso:</p>
+
+                                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                                    {allUsers
+                                        .filter(u => u.username !== sharingProceso.registradoPorUsuario && u.rol === 'usuario') // Solo nivel usuario y que no sea el dueño
+                                        .map(u => {
+                                            const isSelected = sharingProceso.visiblePara?.includes(u.username);
+                                            return (
+                                                <button
+                                                    key={u.id}
+                                                    onClick={() => handleToggleUserVisibility(u.username)}
+                                                    disabled={isSavingShare}
+                                                    className={cn(
+                                                        "w-full flex items-center justify-between p-4 rounded-2xl border transition-all",
+                                                        isSelected
+                                                            ? "bg-primary-blue/20 border-primary-blue text-white"
+                                                            : "bg-white/5 border-white/10 text-gray-400 hover:border-white/30"
+                                                    )}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <UsersIcon className="h-4 w-4" />
+                                                        <div className="text-left">
+                                                            <p className="font-bold uppercase text-sm">{u.username}</p>
+                                                            <p className="text-[10px] opacity-60">{u.email}</p>
+                                                        </div>
+                                                    </div>
+                                                    {isSelected && <Check className="h-5 w-5 text-primary-blue" />}
+                                                </button>
+                                            );
+                                        })
+                                    }
+                                    {allUsers.filter(u => u.username !== sharingProceso.registradoPorUsuario && u.rol === 'usuario').length === 0 && (
+                                        <p className="text-center py-6 text-gray-500 text-sm italic">No hay otros usuarios de nivel "Usuario" para compartir.</p>
+                                    )}
+                                </div>
+
+                                <button
+                                    onClick={() => setSharingProceso(null)}
+                                    className="w-full mt-4 bg-white/10 py-4 rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:bg-white/20 transition-all"
+                                >
+                                    CERRAR
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
