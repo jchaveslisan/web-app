@@ -16,10 +16,10 @@ export default function NuevoProcesoPage() {
     const [etapas, setEtapas] = useState<Etapa[]>([]);
     const [colaboradores, setColaboradores] = useState<ColaboradorMaestro[]>([]);
 
-    // Protección de ruta admistrativa
+    // Protección de ruta (Solo usuarios autenticados)
     useEffect(() => {
-        if (user && !['supervisor', 'superadmin'].includes(user.rol)) {
-            router.push('/procesos');
+        if (user === null) {
+            router.push('/login');
         }
     }, [user, router]);
 

@@ -38,9 +38,9 @@ export default function AdminPage() {
 
     const user = useAuthStore(state => state.user);
 
-    // Protección de ruta admistrativa
+    // Protección de ruta admistrativa - Solo Superadmin
     useEffect(() => {
-        if (!loading && (!user || !['supervisor', 'superadmin'].includes(user.rol))) {
+        if (!loading && (!user || user.rol !== 'superadmin')) {
             router.push('/procesos');
         }
     }, [user, loading, router]);
@@ -628,7 +628,7 @@ export default function AdminPage() {
                                                     onChange={(e) => handleUpdateUserRole(u.id, e.target.value as UserRole)}
                                                     className="bg-black/20 border border-white/10 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-primary-blue outline-none"
                                                 >
-                                                    <option value="operador">Operador</option>
+                                                    <option value="usuario">Usuario</option>
                                                     <option value="supervisor">Supervisor</option>
                                                     <option value="superadmin">Superadmin</option>
                                                 </select>

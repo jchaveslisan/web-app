@@ -18,7 +18,9 @@ import {
     X,
     ClipboardList,
     ShieldCheck,
-    Timer
+    Timer,
+    Edit2,
+    Plus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProcesoRealtime } from '@/hooks/useProcesoRealtime';
@@ -28,6 +30,7 @@ import { useAuthStore } from '@/lib/auth-service';
 import ModalAddColaborador from '@/components/proceso/ModalAddColaborador';
 import ModalJustificacion from '@/components/proceso/ModalJustificacion';
 import ModalBulkExit from '@/components/proceso/ModalBulkExit';
+import ModalEditarProceso from '@/components/proceso/ModalEditarProceso';
 import { doc, Timestamp, increment } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { calculateProductivity, ProductivityStats, formatSeconds } from '@/lib/productivity-utils';
@@ -55,6 +58,15 @@ export default function MonitoreoPage() {
     const { proceso, colaboradores, eventos, loading } = useProcesoRealtime(id);
     const user = useAuthStore(state => state.user);
 
+    // Validación de acceso por Rol (Usuario solo ve los suyos)
+    useEffect(() => {
+        if (!loading && proceso && user?.rol === 'usuario') {
+            if (proceso.registradoPorUsuario !== user.username) {
+                router.push('/procesos');
+            }
+        }
+    }, [proceso, user, loading, router]);
+
     const [stats, setStats] = useState<ProductivityStats>({
         velocidadActual: 0,
         eficiencia: 0,
@@ -80,6 +92,7 @@ export default function MonitoreoPage() {
     const [showModalBulkExit, setShowModalBulkExit] = useState(false);
     const [calidadTimerStr, setCalidadTimerStr] = useState("00:00:00");
     const [pauseMoment, setPauseMoment] = useState<Date | null>(null);
+    const [showEditModal, setShowEditModal] = useState(false);
 
     // Sincronizar unidades calculadas con el valor de la base de datos cuando cambia
     useEffect(() => {
@@ -414,7 +427,7 @@ export default function MonitoreoPage() {
         </div>
     );
 
-    const handleStaffAction = async (actionType: 'entry' | 'exit') => {
+    const handleStaffAction = async () => {
         if (!staffCode.trim()) return;
         setStaffActionLoading(true);
         setStaffMessage(null);
@@ -427,46 +440,35 @@ export default function MonitoreoPage() {
                 return;
             }
 
-            if (actionType === 'entry') {
-                // Verificar si ya está en ESTE proceso
-                const yaEnProceso = colaboradores.find(c => c.colaboradorId === maestro.id && !c.horaSalida);
-                if (yaEnProceso) {
-                    setStaffMessage({ text: `${maestro.nombreCompleto} YA ESTÁ EN LÍNEA`, type: 'info' });
-                    setTimeout(() => setStaffMessage(null), 4000);
-                    return;
-                }
+            // DETECCIÓN AUTOMÁTICA: ¿Ya está en este proceso?
+            const logActivo = colaboradores.find(c => c.colaboradorId === maestro.id && !c.horaSalida);
 
-                // Verificar si está activo en OTRO proceso
+            if (logActivo) {
+                // YA ESTÁ -> ES UNA SALIDA
+                setStaffCode('');
+                handleSalidaColaborador(logActivo.id, maestro.nombreCompleto);
+            } else {
+                // NO ESTÁ -> ES UN INGRESO
+                // Pero primero verificar si está en OTRA línea
                 const activosGlobales = await getColaboradoresActivos();
                 const yaActivoGlobal = activosGlobales.find(c => (c.colaboradorId === maestro.id || c.id === maestro.id) && c.procesoId !== id && !c.horaSalida);
+
                 if (yaActivoGlobal) {
                     setStaffMessage({ text: `${maestro.nombreCompleto} ESTÁ EN OTRA LÍNEA`, type: 'error' });
                     setTimeout(() => setStaffMessage(null), 4000);
                     return;
                 }
 
-                // Para procesos anexos u otros, agregar directamente como colaborador sin mostrar modal
+                // Proceder con ingreso
                 const tipoActual = getTipoProcesoReal(proceso);
                 if (tipoActual === 'anexos' || tipoActual === 'otros') {
                     await handleConfirmStaffEntry('colaborador', maestro);
                     setStaffCode('');
                 } else {
-                    // Para otros procesos, mostrar modal para elegir tipo
                     setPendingStaffMaestro(maestro);
                     setShowStaffTypeModal(true);
                     setStaffCode('');
                 }
-            } else {
-                // SALIDA
-                const logActivo = colaboradores.find(c => c.colaboradorId === maestro.id && !c.horaSalida);
-                if (!logActivo) {
-                    setStaffMessage({ text: `${maestro.nombreCompleto} NO ESTÁ AQUÍ`, type: 'error' });
-                    setTimeout(() => setStaffMessage(null), 4000);
-                    return;
-                }
-
-                setStaffCode('');
-                handleSalidaColaborador(logActivo.id, maestro.nombreCompleto);
             }
         } catch (error) {
             console.error('Error en acción de personal:', error);
@@ -570,6 +572,15 @@ export default function MonitoreoPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                    {['supervisor', 'superadmin'].includes(user?.rol || '') && (
+                        <button
+                            onClick={() => setShowEditModal(true)}
+                            className="p-2 hover:bg-white/10 rounded-lg transition-colors border border-white/5 bg-white/5 text-gray-400 group"
+                            title="Editar Valores del Proceso"
+                        >
+                            <Edit2 className="h-5 w-5 group-hover:text-primary-blue transition-colors" />
+                        </button>
+                    )}
                     <button
                         onClick={() => setShowEventsModal(true)}
                         className="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-4 py-1.5 rounded-full border border-white/10 text-xs font-black uppercase tracking-widest transition-all"
@@ -811,7 +822,7 @@ export default function MonitoreoPage() {
                                         disabled={staffActionLoading || proceso.estado === 'Finalizado'}
                                         className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-mono text-xl font-black text-center focus:border-primary-blue focus:ring-1 focus:ring-primary-blue outline-none transition-all placeholder:text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                                         onKeyDown={(e) => {
-                                            if (e.key === 'Enter') handleStaffAction('entry');
+                                            if (e.key === 'Enter') handleStaffAction();
                                         }}
                                     />
                                     {staffActionLoading && (
@@ -835,18 +846,11 @@ export default function MonitoreoPage() {
 
                                 <div className="flex gap-3">
                                     <button
-                                        onClick={() => handleStaffAction('entry')}
+                                        onClick={handleStaffAction}
                                         disabled={staffActionLoading || !staffCode || proceso.estado === 'Finalizado'}
-                                        className="bg-success-green text-black px-8 py-4 rounded-2xl font-black text-sm uppercase flex items-center gap-3 hover:bg-green-600 disabled:opacity-50 transition-colors shadow-lg shadow-green-500/10"
+                                        className="bg-primary-blue text-white px-10 py-4 rounded-2xl font-black text-sm uppercase flex items-center gap-3 hover:bg-blue-600 disabled:opacity-50 transition-colors shadow-lg shadow-blue-500/10"
                                     >
-                                        <UserPlus className="h-5 w-5" /> Ingreso
-                                    </button>
-                                    <button
-                                        onClick={() => handleStaffAction('exit')}
-                                        disabled={staffActionLoading || !staffCode || proceso.estado === 'Finalizado'}
-                                        className="bg-danger-red text-white px-8 py-4 rounded-2xl font-black text-sm uppercase flex items-center gap-3 hover:bg-red-600 disabled:opacity-50 transition-colors shadow-lg shadow-red-500/10"
-                                    >
-                                        <LogOut className="h-5 w-5" /> Salida
+                                        <UserPlus className="h-5 w-5" /> Registrar Accion
                                     </button>
                                     {/* BULK EXIT BUTTON */}
                                     {['supervisor', 'superadmin'].includes(user?.rol || '') && personalActivo > 0 && proceso.estado === 'Pausado' && (
@@ -860,6 +864,35 @@ export default function MonitoreoPage() {
                                     )}
                                 </div>
                             </div>
+
+                            {/* AJUSTE MANUAL - SOLO SUPERVISOR/SUPERADMIN */}
+                            {['supervisor', 'superadmin'].includes(user?.rol || '') && proceso.estado !== 'Finalizado' && (
+                                <div className="mt-8 pt-8 border-t border-white/5 max-w-4xl">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <Plus className="h-5 w-5 text-accent-purple" />
+                                        <h3 className="text-[clamp(0.6rem,1vw,0.875rem)] font-black tracking-[0.3em] uppercase text-gray-400">Ajuste Manual de Unidades</h3>
+                                    </div>
+                                    <div className="flex flex-wrap gap-3">
+                                        {[-10, -5, -1, 1, 5, 10, 50, 100].map(val => (
+                                            <button
+                                                key={val}
+                                                onClick={() => handleManualProgress(val)}
+                                                className={cn(
+                                                    "px-6 py-2 rounded-xl font-black text-xs transition-all border",
+                                                    val > 0
+                                                        ? "bg-success-green/5 border-success-green/20 text-success-green hover:bg-success-green hover:text-black"
+                                                        : "bg-danger-red/5 border-danger-red/20 text-danger-red hover:bg-danger-red hover:text-white"
+                                                )}
+                                            >
+                                                {val > 0 ? `+${val}` : val}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className="text-[9px] text-gray-600 font-bold uppercase tracking-widest mt-3 italic">
+                                        * Use estos botones para corregir discrepancias entre el conteo teórico y el real de la línea.
+                                    </p>
+                                </div>
+                            )}
 
                         </div>
                     </div>
@@ -1042,47 +1075,106 @@ export default function MonitoreoPage() {
                                 <div className="flex justify-between items-center mb-4">
                                     <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">Colaboradores cargados en el proceso</p>
                                 </div>
-                                <div className="grid grid-cols-1 gap-3">
-                                    {colaboradores.map((colab) => (
-                                        <div key={colab.id} className="flex items-center justify-between p-5 bg-white/5 rounded-3xl border border-white/5 group hover:border-white/20 transition-all">
-                                            <div className="flex items-center gap-5">
-                                                <div className="w-12 h-12 bg-primary-blue/20 rounded-2xl flex items-center justify-center font-black text-sm text-primary-blue">
-                                                    {colab.nombre.substring(0, 2).toUpperCase()}
+                                {(() => {
+                                    const activos = colaboradores.filter(c => !c.horaSalida);
+                                    const historico = colaboradores.filter(c => c.horaSalida);
+
+                                    return (
+                                        <div className="space-y-10">
+                                            {/* SECCIÓN ACTIVO */}
+                                            <section>
+                                                <div className="flex items-center gap-4 mb-6">
+                                                    <div className="h-px flex-1 bg-success-green/20" />
+                                                    <h4 className="text-[10px] font-black text-success-green uppercase tracking-[0.4em]">Personal Activo ({activos.length})</h4>
+                                                    <div className="h-px flex-1 bg-success-green/20" />
                                                 </div>
-                                                <div>
-                                                    <p className="font-black text-lg uppercase">{colab.nombre}</p>
-                                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">
-                                                        ID: {colab.colaboradorId} | Tipo: {colab.tipo}
-                                                    </p>
+                                                <div className="grid grid-cols-1 gap-3">
+                                                    {activos.length === 0 ? (
+                                                        <p className="text-center py-8 text-gray-500 font-bold uppercase tracking-widest text-xs border-2 border-dashed border-white/5 rounded-3xl">No hay personal activo en este momento</p>
+                                                    ) : (
+                                                        activos.map((colab) => (
+                                                            <div key={colab.id} className="flex items-center justify-between p-5 bg-white/5 rounded-3xl border border-white/5 group hover:border-white/20 transition-all">
+                                                                <div className="flex items-center gap-5">
+                                                                    <div className={cn(
+                                                                        "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm",
+                                                                        colab.tipo === 'apoyo' ? "bg-primary-blue/20 text-primary-blue" : "bg-success-green/20 text-success-green"
+                                                                    )}>
+                                                                        {colab.nombre.substring(0, 2).toUpperCase()}
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="flex items-center gap-3">
+                                                                            <p className="font-black text-lg uppercase">{colab.nombre}</p>
+                                                                            <span className={cn(
+                                                                                "px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border",
+                                                                                colab.tipo === 'apoyo'
+                                                                                    ? "bg-primary-blue/10 text-primary-blue border-primary-blue/20"
+                                                                                    : "bg-success-green/10 text-success-green border-success-green/20"
+                                                                            )}>
+                                                                                {colab.tipo}
+                                                                            </span>
+                                                                        </div>
+                                                                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em] mt-0.5">
+                                                                            ID: {colab.colaboradorId} • Ingreso: {format((colab.horaIngreso as any).toDate(), 'HH:mm')}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-6">
+                                                                    <div className="text-right hidden sm:block">
+                                                                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Estado</p>
+                                                                        <p className="font-mono text-xs text-success-green font-bold animate-pulse uppercase">En Línea</p>
+                                                                    </div>
+                                                                    {proceso.estado !== 'Finalizado' && (
+                                                                        <button
+                                                                            onClick={() => handleSalidaColaborador(colab.id, colab.nombre)}
+                                                                            className="p-3 bg-danger-red/10 text-danger-red rounded-xl hover:bg-danger-red hover:text-white transition-all shadow-lg"
+                                                                            title="Registrar Salida"
+                                                                        >
+                                                                            <LogOut className="h-4 w-4" />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    )}
                                                 </div>
-                                            </div>
-                                            <div className="flex items-center gap-8">
-                                                {colab.horaSalida ? (
-                                                    <div className="text-right">
-                                                        <p className="text-[10px] font-black text-gray-500 uppercase">Salida registrada</p>
-                                                        <p className="font-mono text-sm text-gray-400">
-                                                            {format((colab.horaSalida as any).toDate(), 'HH:mm:ss')}
-                                                        </p>
+                                            </section>
+
+                                            {/* SECCIÓN HISTÓRICO */}
+                                            {historico.length > 0 && (
+                                                <section className="pb-4">
+                                                    <div className="flex items-center gap-4 mb-6">
+                                                        <div className="h-px flex-1 bg-white/5" />
+                                                        <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em]">Historial de Movimientos ({historico.length})</h4>
+                                                        <div className="h-px flex-1 bg-white/5" />
                                                     </div>
-                                                ) : (
-                                                    <div className="text-right">
-                                                        <p className="text-[10px] font-black text-gray-500 uppercase">Estado</p>
-                                                        <p className="font-mono text-sm text-success-green font-bold animate-pulse">EN LINEA</p>
+                                                    <div className="grid grid-cols-1 gap-2">
+                                                        {historico.map((colab) => (
+                                                            <div key={colab.id} className="flex items-center justify-between p-4 bg-white/[0.02] rounded-2xl border border-white/[0.02] opacity-60 hover:opacity-100 transition-all">
+                                                                <div className="flex items-center gap-4">
+                                                                    <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center font-black text-xs text-gray-400">
+                                                                        {colab.nombre.substring(0, 2).toUpperCase()}
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="font-bold text-sm uppercase text-gray-300">{colab.nombre}</p>
+                                                                        <p className="text-[9px] text-gray-500 font-bold uppercase tracking-tight">
+                                                                            {colab.tipo} • ID: {colab.colaboradorId}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className="text-[9px] font-black text-gray-600 uppercase">Movimiento</p>
+                                                                    <p className="font-mono text-[10px] text-gray-500 italic">
+                                                                        {format((colab.horaIngreso as any).toDate(), 'HH:mm')} {'->'} {format((colab.horaSalida as any).toDate(), 'HH:mm')}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        ))}
                                                     </div>
-                                                )}
-                                                {!colab.horaSalida && proceso.estado !== 'Finalizado' && (
-                                                    <button
-                                                        onClick={() => handleSalidaColaborador(colab.id, colab.nombre)}
-                                                        className="p-3 bg-danger-red/10 text-danger-red rounded-xl hover:bg-danger-red hover:text-white transition-all"
-                                                        title="Registrar Salida"
-                                                    >
-                                                        <LogOut className="h-5 w-5" />
-                                                    </button>
-                                                )}
-                                            </div>
+                                                </section>
+                                            )}
                                         </div>
-                                    ))}
-                                </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     </div>
@@ -1220,6 +1312,18 @@ export default function MonitoreoPage() {
                             </div>
                         </div>
                     </div>
+                )
+            }
+            {
+                showEditModal && proceso && (
+                    <ModalEditarProceso
+                        proceso={proceso}
+                        onClose={() => setShowEditModal(false)}
+                        onSave={async (updates) => {
+                            await updateProceso(id, updates);
+                            await addEventoLog(id, "Valores Modificados", "Se editaron los valores base del proceso", "SISTEMA", user?.username || "Sistema");
+                        }}
+                    />
                 )
             }
         </div >

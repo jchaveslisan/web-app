@@ -77,11 +77,17 @@ export default function ProcesosPage() {
         }));
     };
 
-    const filteredProcesos = procesos.filter(p =>
-        p.ordenProduccion.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.producto.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.lote.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredProcesos = procesos.filter(p => {
+        // 1. Filtro por Rol: Usuario solo ve los suyos
+        if (user?.rol === 'usuario') {
+            if (p.registradoPorUsuario !== user.username) return false;
+        }
+
+        // 2. Filtro por búsqueda
+        return p.ordenProduccion.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.producto.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.lote.toLowerCase().includes(searchTerm.toLowerCase());
+    });
 
     // Agrupar procesos por estado
     const procesosPorEstado = {
@@ -254,13 +260,15 @@ export default function ProcesosPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <button
-                        onClick={() => router.push('/admin')}
-                        className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors border border-white/10"
-                        title="Administración"
-                    >
-                        <Settings className="h-6 w-6 text-gray-400" />
-                    </button>
+                    {user?.rol === 'superadmin' && (
+                        <button
+                            onClick={() => router.push('/admin')}
+                            className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors border border-white/10"
+                            title="Administración"
+                        >
+                            <Settings className="h-6 w-6 text-gray-400" />
+                        </button>
+                    )}
                     <button
                         onClick={async () => {
                             await import('@/lib/auth-service').then(m => m.logout());
