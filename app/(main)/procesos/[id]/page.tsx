@@ -89,7 +89,12 @@ export default function MonitoreoPage() {
 
     // LÓGICA DE CÁLCULO DE PROGRESO TEÓRICO (CATCH-UP)
     useEffect(() => {
-        if (!proceso || proceso.estado !== 'Iniciado') {
+        const isActuallyPaused = !proceso ||
+            proceso.estado !== 'Iniciado' ||
+            (proceso as any).pausadoPorFaltaDePersonal ||
+            (modalJustificacion.show && modalJustificacion.tipo === 'pausa');
+
+        if (isActuallyPaused) {
             if (proceso) setCalculatedUnits(proceso.trabajoCompletado || 0);
             return;
         }
@@ -116,14 +121,25 @@ export default function MonitoreoPage() {
         syncCalculatedUnits();
         const timerProgress = setInterval(syncCalculatedUnits, 1000);
         return () => clearInterval(timerProgress);
-    }, [proceso?.id, proceso?.estado, proceso?.ultimoUpdate, proceso?.trabajoCompletado, colaboradores, proceso?.velocidadTeorica]);
+    }, [proceso?.id, proceso?.estado, (proceso as any)?.pausadoPorFaltaDePersonal, modalJustificacion.show, proceso?.ultimoUpdate, proceso?.trabajoCompletado, colaboradores, proceso?.velocidadTeorica]);
 
     useEffect(() => {
         if (!proceso) return;
 
         const update = () => {
             const colabs = colaboradores || [];
-            const latestProceso = { ...proceso, trabajoCompletado: calculatedUnits };
+
+            // Determinar si el proceso está EFECTIVAMENTE pausado (localmente)
+            const isActuallyPaused = (proceso.estado !== 'Iniciado' && proceso.estado !== 'Registrado') ||
+                (proceso as any).pausadoPorFaltaDePersonal ||
+                (modalJustificacion.show && modalJustificacion.tipo === 'pausa');
+
+            const latestProceso: any = {
+                ...proceso,
+                trabajoCompletado: calculatedUnits,
+                estado: isActuallyPaused ? 'Pausado' : proceso.estado
+            };
+
             const newStats = calculateProductivity(latestProceso, colabs);
             setStats(newStats);
 
@@ -163,7 +179,7 @@ export default function MonitoreoPage() {
         update();
         const timer = setInterval(update, 1000);
         return () => clearInterval(timer);
-    }, [proceso, colaboradores, calculatedUnits]);
+    }, [proceso, colaboradores, calculatedUnits, modalJustificacion.show]);
 
     const handleConfirmJustificacion = async (justificacion: string) => {
         if (!proceso) return;
