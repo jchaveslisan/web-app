@@ -517,12 +517,7 @@ export default function MonitoreoPage() {
                         if (tipoProc === 'otros') {
                             return (
                                 <div className="glass rounded-[2.5rem] p-8 bg-gradient-to-br from-white/[0.05] to-transparent border-white/5">
-                                    <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
-                                        <ClipboardList className="h-6 w-6 text-accent-purple" />
-                                        <h3 className="text-lg font-black tracking-widest uppercase">Información del Proceso</h3>
-                                    </div>
-
-                                    <div className="space-y-6">
+                                    <div className="space-y-8">
                                         {/* Producto */}
                                         <div className="space-y-1">
                                             <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Producto en proceso</p>
@@ -746,12 +741,7 @@ export default function MonitoreoPage() {
 
                             {/* PRODUCTION DATA (SIDEBAR) */}
                             <div className="glass rounded-[2.5rem] p-8 bg-gradient-to-br from-white/[0.05] to-transparent border-white/5">
-                                <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
-                                    <ClipboardList className="h-6 w-6 text-accent-purple" />
-                                    <h3 className="text-lg font-black tracking-widest uppercase">Información del Proceso</h3>
-                                </div>
-
-                                <div className="space-y-6">
+                                <div className="space-y-8">
                                     {/* Producto */}
                                     <div className="space-y-1">
                                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Producto en proceso</p>
