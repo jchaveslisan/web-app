@@ -50,7 +50,10 @@ export interface Proceso {
     ultimoUpdate?: any; // Firestore Timestamp
     trabajoCompletadoTeorico?: number;
     pausadoPorFaltaDePersonal?: boolean;
-    tiempoRestanteAlPausar?: number | null;
+    calidadEstado?: 'ninguno' | 'esperando' | 'inspeccion' | 'aprobado';
+    calidadLlamadaEn?: any;
+    calidadLlegadaEn?: any;
+    calidadAprobadaEn?: any;
 }
 
 export interface ColaboradorLog {

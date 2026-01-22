@@ -16,7 +16,9 @@ import {
     History,
     Check,
     X,
-    ClipboardList
+    ClipboardList,
+    ShieldCheck,
+    Timer
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProcesoRealtime } from '@/hooks/useProcesoRealtime';
@@ -76,6 +78,7 @@ export default function MonitoreoPage() {
     const [pendingStaffMaestro, setPendingStaffMaestro] = useState<any>(null);
     const [pendingExitLog, setPendingExitLog] = useState<{ id: string, nombre: string } | null>(null);
     const [showModalBulkExit, setShowModalBulkExit] = useState(false);
+    const [calidadTimerStr, setCalidadTimerStr] = useState("00:00:00");
 
     // Sincronizar unidades calculadas con el valor de la base de datos cuando cambia
     useEffect(() => {
@@ -133,6 +136,17 @@ export default function MonitoreoPage() {
             } else {
                 const total = proceso.setupTiempoAcumulado || proceso.tiempoSetupSegundos || 0;
                 setSetupTimerStr(formatSeconds(total));
+            }
+
+            // Reloj de Calidad
+            if (proceso.calidadEstado === 'esperando' && proceso.calidadLlamadaEn) {
+                const start = (proceso.calidadLlamadaEn as any).toDate ? (proceso.calidadLlamadaEn as any).toDate() : new Date(proceso.calidadLlamadaEn);
+                const duracion = Math.max(0, differenceInSeconds(new Date(), start));
+                setCalidadTimerStr(formatSeconds(duracion));
+            } else if (proceso.calidadEstado === 'inspeccion' && proceso.calidadLlegadaEn) {
+                const start = (proceso.calidadLlegadaEn as any).toDate ? (proceso.calidadLlegadaEn as any).toDate() : new Date(proceso.calidadLlegadaEn);
+                const duracion = Math.max(0, differenceInSeconds(new Date(), start));
+                setCalidadTimerStr(formatSeconds(duracion));
             }
 
             // AUTO-ACTIVACIÓN DEL PERÍODO DE GRACIA
@@ -229,6 +243,35 @@ export default function MonitoreoPage() {
                 updates.tiempoSetupSegundos = total;
                 updates.setupStartTime = null;
                 await addEventoLog(id, "Setup Finalizado", `Duración total: ${setupTimerStr}`, "SETUP", user?.username || 'sistema');
+            }
+            await updateProceso(id, updates);
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    const handleCalidadAction = async (action: 'call' | 'arrival' | 'approval' | 'reset') => {
+        if (!proceso || proceso.estado === 'Finalizado') return;
+
+        try {
+            const updates: any = {};
+            if (action === 'call') {
+                updates.calidadEstado = 'esperando';
+                updates.calidadLlamadaEn = Timestamp.now();
+                await addEventoLog(id, "Calidad Solicitada", "Se requiere inspección de calidad", "CALIDAD", user?.username || 'sistema');
+            } else if (action === 'arrival') {
+                updates.calidadEstado = 'inspeccion';
+                updates.calidadLlegadaEn = Timestamp.now();
+                await addEventoLog(id, "Calidad Llegada", "Personal de calidad en la línea", "CALIDAD", user?.username || 'sistema');
+            } else if (action === 'approval') {
+                updates.calidadEstado = 'aprobado';
+                updates.calidadAprobadaEn = Timestamp.now();
+                await addEventoLog(id, "Calidad Aprobada", "Proceso aprobado por calidad", "CALIDAD", user?.username || 'sistema');
+            } else if (action === 'reset') {
+                updates.calidadEstado = 'ninguno';
+                updates.calidadLlamadaEn = null;
+                updates.calidadLlegadaEn = null;
+                updates.calidadAprobadaEn = null;
             }
             await updateProceso(id, updates);
         } catch (error) {
@@ -656,6 +699,14 @@ export default function MonitoreoPage() {
                                     )}
                                     {proceso.estado !== 'Finalizado' && (
                                         <button
+                                            className="w-full sm:w-auto bg-accent-purple/10 hover:bg-accent-purple text-accent-purple border border-accent-purple/20 px-8 md:px-12 py-4 md:py-5 rounded-3xl font-black text-lg md:text-xl flex items-center justify-center gap-4 transition-all"
+                                            onClick={() => handleCalidadAction(proceso.calidadEstado === 'aprobado' ? 'reset' : 'call')}
+                                        >
+                                            <ShieldCheck className="h-6 w-6 md:h-7 md:w-7" /> {proceso.calidadEstado === 'aprobado' ? 'CALIDAD (LISTO)' : 'CALIDAD'}
+                                        </button>
+                                    )}
+                                    {proceso.estado !== 'Finalizado' && (
+                                        <button
                                             className="w-full sm:w-auto bg-danger-red/10 hover:bg-danger-red text-danger-red border border-danger-red/20 px-8 md:px-12 py-4 md:py-5 rounded-3xl font-black text-lg md:text-xl flex items-center justify-center gap-4 transition-all"
                                             onClick={handleFinalizarProceso}
                                         >
@@ -996,6 +1047,57 @@ export default function MonitoreoPage() {
                     </div>
                 )
             }
+
+            {/* VENTANA DE CALIDAD */}
+            {(proceso.calidadEstado === 'esperando' || proceso.calidadEstado === 'inspeccion') && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
+                    <div className="bg-warning-yellow p-10 rounded-[4rem] shadow-[0_0_100px_rgba(251,191,36,0.5)] max-w-xl w-full transform animate-in fade-in zoom-in duration-300 border-4 border-black/10">
+                        <div className="flex flex-col items-center text-center gap-8">
+                            <div className="bg-black/10 p-6 rounded-full shadow-inner">
+                                <ShieldCheck className="h-20 w-20 text-black animate-pulse" />
+                            </div>
+
+                            <div className="space-y-2">
+                                <h3 className="text-4xl md:text-5xl font-black uppercase tracking-tighter text-black leading-tight">
+                                    {proceso.calidadEstado === 'esperando' ? 'En espera de calidad' : 'Inspección de calidad'}
+                                </h3>
+                                <div className="flex items-center justify-center gap-2 text-black/50 font-black uppercase tracking-[0.2em] text-sm">
+                                    <Clock className="h-4 w-4" />
+                                    {proceso.calidadEstado === 'esperando' ? 'Tiempo transcurrido' : 'Tiempo en inspección'}
+                                </div>
+                                <div className="text-8xl font-mono font-black text-black mt-4 tracking-tighter drop-shadow-sm">
+                                    {calidadTimerStr}
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-4 w-full mt-2">
+                                {proceso.calidadEstado === 'esperando' ? (
+                                    <button
+                                        onClick={() => handleCalidadAction('arrival')}
+                                        className="w-full bg-black text-warning-yellow py-6 rounded-3xl font-black text-2xl hover:bg-gray-900 transition-all flex items-center justify-center gap-4 shadow-xl translate-y-0 active:translate-y-1"
+                                    >
+                                        <Timer className="h-8 w-8" /> INICIO CALIDAD
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => handleCalidadAction('approval')}
+                                        className="w-full bg-black text-success-green py-6 rounded-3xl font-black text-2xl hover:bg-gray-900 transition-all flex items-center justify-center gap-4 shadow-xl translate-y-0 active:translate-y-1"
+                                    >
+                                        <Check className="h-8 w-8" /> APROBACIÓN DE CALIDAD
+                                    </button>
+                                )}
+
+                                <button
+                                    onClick={() => handleCalidadAction('reset')}
+                                    className="text-black/40 font-black uppercase tracking-widest text-xs hover:text-black transition-colors mt-2"
+                                >
+                                    Cancelar o Reiniciar Proceso de Calidad
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* POPUP DE NOTIFICACIÓN DE PERSONAL (4 SEGUNDOS) */}
             {
