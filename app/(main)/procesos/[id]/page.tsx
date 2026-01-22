@@ -915,8 +915,8 @@ export default function MonitoreoPage() {
                                 </div>
                             </div>
 
-                            {/* AJUSTE MANUAL - SOLO SUPERVISOR/SUPERADMIN */}
-                            {['supervisor', 'superadmin'].includes(user?.rol || '') && proceso.estado !== 'Finalizado' && (
+                            {/* AJUSTE MANUAL - SOLO SUPERVISOR/SUPERADMIN Y PROCESOS DE EMPAQUE */}
+                            {['supervisor', 'superadmin'].includes(user?.rol || '') && proceso.estado !== 'Finalizado' && getTipoProcesoReal(proceso) === 'empaque' && (
                                 <div className="mt-8 pt-8 border-t border-white/5 max-w-4xl">
                                     <div className="flex items-center gap-3 mb-4">
                                         <Plus className="h-5 w-5 text-accent-purple" />
