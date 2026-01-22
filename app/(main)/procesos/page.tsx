@@ -50,11 +50,13 @@ export default function ProcesosPage() {
     });
     const [refreshKey, setRefreshKey] = useState(0);
     const [colaboradoresPorProceso, setColaboradoresPorProceso] = useState<Record<string, any[]>>({});
+    const [allColaboradores, setAllColaboradores] = useState<any[]>([]);
+    const [activeLogs, setActiveLogs] = useState<any[]>([]);
     const { procesos, loading } = useProcesos();
     const user = useAuthStore(state => state.user);
     const router = useRouter();
 
-    const [activeTab, setActiveTab] = useState<TipoProceso>('empaque');
+    const [activeTab, setActiveTab] = useState<TipoProceso | 'personal'>('empaque');
 
     // Sharing state
     const [sharingProceso, setSharingProceso] = useState<Proceso | null>(null);
@@ -93,6 +95,26 @@ export default function ProcesosPage() {
             unsubscribers.forEach(unsub => unsub());
         };
     }, [procesos]);
+
+    // Traer todos los colaboradores y logs activos para la pestaña PERSONAL
+    useEffect(() => {
+        if (activeTab !== 'personal') return;
+
+        const qColabs = query(collection(db, 'maestro_colaboradores'), where('activo', '==', true));
+        const unsubscribeColabs = onSnapshot(qColabs, (snap) => {
+            setAllColaboradores(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+
+        const qLogs = query(collection(db, 'colaboradores_log'), where('horaSalida', '==', null));
+        const unsubscribeLogs = onSnapshot(qLogs, (snap) => {
+            setActiveLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+
+        return () => {
+            unsubscribeColabs();
+            unsubscribeLogs();
+        };
+    }, [activeTab]);
 
     // Fetch all users for sharing
     useEffect(() => {
@@ -361,10 +383,11 @@ export default function ProcesosPage() {
                     { id: 'empaque', label: 'EMPAQUE' },
                     { id: 'otros', label: 'OTROS PROCESOS' },
                     { id: 'anexos', label: 'ANEXOS' },
+                    { id: 'personal', label: 'PERSONAL' },
                 ].map((tabItem) => (
                     <button
                         key={tabItem.id}
-                        onClick={() => setActiveTab(tabItem.id as TipoProceso)}
+                        onClick={() => setActiveTab(tabItem.id as any)}
                         className={cn(
                             "px-6 py-2.5 rounded-xl text-xs font-black transition-all tracking-widest",
                             activeTab === tabItem.id
@@ -398,148 +421,210 @@ export default function ProcesosPage() {
                     </button>
                 </div>
 
-                {/* Tabla de Procesos */}
+                {/* Tabla de Procesos o Vista de Personal */}
                 <div className="space-y-4" key={refreshKey}>
-                    {(Object.keys(procesosPorEstado) as ProcesoEstado[]).map((estado) => {
-                        const procesosDelEstado = procesosPorEstado[estado];
-                        const isExpanded = expandedStates[estado];
-                        const totalProcesos = procesosDelEstado.length;
+                    {activeTab === 'personal' ? (
+                        <div className="glass rounded-3xl border border-white/10 overflow-hidden">
+                            <div className="p-8 border-b border-white/10 bg-white/5">
+                                <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-3">
+                                    <UsersIcon className="h-6 w-6 text-success-green" /> ESTADO DEL PERSONAL ACTIVO
+                                </h3>
+                                <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-1">Monitoreo de disponibilidad y asignaciones en tiempo real</p>
+                            </div>
+                            <div className="p-8">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {allColaboradores
+                                        .filter(c => c.nombreCompleto.toLowerCase().includes(searchTerm.toLowerCase()) || c.claveRegistro.includes(searchTerm))
+                                        .sort((a, b) => a.nombreCompleto.localeCompare(b.nombreCompleto))
+                                        .map(colab => {
+                                            const activeLog = activeLogs.find(l => l.colaboradorId === colab.id);
+                                            const activeProceso = activeLog ? procesos.find(p => p.id === activeLog.procesoId) : null;
 
-                        return (
-                            <div key={estado} className="overflow-hidden glass rounded-2xl border border-white/10">
-                                {/* Header del Acordeón */}
-                                <button
-                                    onClick={() => toggleState(estado)}
-                                    className={cn(
-                                        "w-full p-5 flex items-center justify-between hover:bg-white/[0.03] transition-colors border-b",
-                                        isExpanded ? "border-white/10 bg-white/[0.02]" : "border-white/10"
-                                    )}
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <ChevronDown
-                                            className={cn(
-                                                "h-5 w-5 transition-transform duration-300",
-                                                isExpanded && "rotate-180"
-                                            )}
-                                        />
-                                        <div className={cn(
-                                            "inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-bold uppercase tracking-tight",
-                                            getStatusColor(estado)
-                                        )}>
-                                            {getStatusIcon(estado)}
-                                            {estado}
-                                        </div>
-                                        <span className="text-sm font-bold text-gray-400">
-                                            {totalProcesos} {totalProcesos === 1 ? 'proceso' : 'procesos'}
-                                        </span>
-                                    </div>
-                                </button>
+                                            return (
+                                                <div key={colab.id} className="bg-white/5 border border-white/10 p-5 rounded-2xl flex items-center justify-between group transition-all hover:bg-white/[0.08]">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-3 mb-1">
+                                                            <div className={cn(
+                                                                "h-2 w-2 rounded-full",
+                                                                activeProceso ? "bg-success-green animate-pulse" : "bg-gray-600"
+                                                            )} />
+                                                            <p className="font-bold text-white truncate uppercase text-sm tracking-tight">{colab.nombreCompleto}</p>
+                                                        </div>
+                                                        <p className="text-[10px] font-black text-gray-500 tracking-widest uppercase mb-3">ID: {colab.claveRegistro}</p>
 
-                                {/* Contenido del Acordeón */}
-                                {isExpanded && totalProcesos > 0 && (
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left border-collapse min-w-[800px]">
-                                            <thead>
-                                                <tr className="bg-white/[0.02] border-b border-white/10">
-                                                    <th className="p-5 text-xs font-black uppercase tracking-widest text-gray-600">OP</th>
-                                                    <th className="p-5 text-xs font-black uppercase tracking-widest text-gray-600">Producto</th>
-                                                    <th className="p-5 text-xs font-black uppercase tracking-widest text-gray-600">Etapa</th>
-                                                    <th className="p-5 text-xs font-black uppercase tracking-widest text-gray-600 text-center">Unidades Pendientes</th>
-                                                    <th className="p-5 text-xs font-black uppercase tracking-widest text-gray-600 text-center">Temporizador</th>
-                                                    <th className="p-5 text-xs font-black uppercase tracking-widest text-gray-600 text-right">Acciones</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-white/10">
-                                                {procesosDelEstado.map((proceso) => (
-                                                    <tr
-                                                        key={proceso.id}
-                                                        className="hover:bg-white/[0.02] transition-colors group"
-                                                    >
-                                                        <td className="p-5 font-bold text-lg text-white">{proceso.ordenProduccion}</td>
-                                                        <td className="p-5">
-                                                            <div>
-                                                                <div className="font-bold text-white max-w-[200px] truncate" title={proceso.producto}>{proceso.producto}</div>
-                                                                <div className="text-xs text-gray-500 font-medium">Lote: {proceso.lote}</div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="p-5">
-                                                            <span className="bg-white/10 px-2 py-1 rounded text-sm font-mono text-gray-300">
-                                                                {proceso.etapa || '-'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="p-5 text-center">
-                                                            <div className="flex flex-col items-center gap-1">
-                                                                <span className="text-sm font-bold text-success-green">
-                                                                    {proceso.utilizaTemporizador ?
-                                                                        `${getUnidadesPendientes(proceso).toLocaleString('es-ES', { maximumFractionDigits: 1 })} / ${proceso.cantidadProducir}`
-                                                                        : 'N/A'
-                                                                    }
-                                                                </span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="p-5 text-center">
-                                                            <div className="flex flex-col items-center gap-2">
-                                                                {proceso.utilizaTemporizador ? (
-                                                                    <>
-                                                                        <span className={cn(
-                                                                            "text-lg font-bold font-mono transition-colors duration-500",
-                                                                            (() => {
-                                                                                const { isGracePeriod, isTiempoExtra } = getEstadoTemporizador(proceso);
-                                                                                if (isTiempoExtra) return 'text-danger-red animate-pulse';
-                                                                                if (isGracePeriod) return 'text-warning-yellow';
-                                                                                if (proceso.estado === 'Iniciado') return 'text-white';
-                                                                                return 'text-gray-600';
-                                                                            })()
-                                                                        )}>
-                                                                            {getTiempoRestanteEstimado(proceso)}
-                                                                        </span>
-                                                                    </>
-                                                                ) : (
-                                                                    <span className="text-lg font-bold font-mono text-gray-500">N/A</span>
-                                                                )}
-                                                                <span className={cn(
-                                                                    "text-xs font-medium px-2 py-0.5 rounded-full",
-                                                                    proceso.estado === 'Finalizado' ? 'bg-gray-700/30 text-gray-300' :
-                                                                        proceso.estado === 'Pausado' ? 'bg-warning-yellow/20 text-warning-yellow' :
-                                                                            proceso.estado === 'Iniciado' ? 'bg-success-green/20 text-success-green' :
-                                                                                'bg-primary-blue/20 text-primary-blue'
-                                                                )}>
-                                                                    {proceso.estado}
-                                                                </span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="p-5 text-right flex items-center justify-end gap-2">
-                                                            {['superadmin', 'supervisor'].includes(user?.rol || '') && (
+                                                        {activeProceso ? (
+                                                            <div className="flex flex-col gap-1">
+                                                                <span className="text-[9px] font-black text-primary-blue uppercase tracking-[0.2em]">ASIGNADO A:</span>
                                                                 <button
-                                                                    onClick={() => setSharingProceso(proceso)}
-                                                                    className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 group transition-all"
-                                                                    title="Compartir visibilidad"
+                                                                    onClick={() => router.push(`/procesos/${activeProceso.id}`)}
+                                                                    className="text-xs font-bold text-white bg-primary-blue/20 hover:bg-primary-blue/30 border border-primary-blue/30 px-3 py-1.5 rounded-lg text-left truncate transition-all flex items-center gap-2"
                                                                 >
-                                                                    <Share2 className="h-5 w-5 group-hover:text-primary-blue" />
+                                                                    <div className="w-1 h-1 bg-primary-blue rounded-full" />
+                                                                    OP: {activeProceso.ordenProduccion} - {activeProceso.producto}
                                                                 </button>
-                                                            )}
-                                                            <button
-                                                                onClick={() => router.push(`/procesos/${proceso.id}`)}
-                                                                className="bg-primary-blue/10 hover:bg-primary-blue text-primary-blue hover:text-white px-4 py-2 rounded-lg text-sm font-bold transition-all border border-primary-blue/20"
-                                                            >
-                                                                ABRIR
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-
-                                {isExpanded && totalProcesos === 0 && (
-                                    <div className="p-8 text-center text-gray-500">
-                                        <p className="font-medium">No hay procesos en este estado</p>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="inline-flex items-center px-3 py-1 rounded-lg bg-white/5 border border-white/10 text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                                                                LIBRE / SIN ASIGNAR
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+                                {allColaboradores.length === 0 && (
+                                    <div className="py-20 text-center">
+                                        <div className="h-16 w-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/10">
+                                            <UsersIcon className="h-8 w-8 text-gray-600" />
+                                        </div>
+                                        <p className="text-gray-500 font-bold uppercase tracking-widest text-sm">No hay personal activo registrado en el maestro</p>
                                     </div>
                                 )}
                             </div>
-                        );
-                    })}
+                        </div>
+                    ) : (
+                        (Object.keys(procesosPorEstado) as ProcesoEstado[]).map((estado) => {
+                            const procesosDelEstado = procesosPorEstado[estado];
+                            const isExpanded = expandedStates[estado];
+                            const totalProcesos = procesosDelEstado.length;
+
+                            return (
+                                <div key={estado} className="overflow-hidden glass rounded-2xl border border-white/10">
+                                    {/* Header del Acordeón */}
+                                    <button
+                                        onClick={() => toggleState(estado)}
+                                        className={cn(
+                                            "w-full p-5 flex items-center justify-between hover:bg-white/[0.03] transition-colors border-b",
+                                            isExpanded ? "border-white/10 bg-white/[0.02]" : "border-white/10"
+                                        )}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <ChevronDown
+                                                className={cn(
+                                                    "h-5 w-5 transition-transform duration-300",
+                                                    isExpanded && "rotate-180"
+                                                )}
+                                            />
+                                            <div className={cn(
+                                                "inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-bold uppercase tracking-tight",
+                                                getStatusColor(estado)
+                                            )}>
+                                                {getStatusIcon(estado)}
+                                                {estado}
+                                            </div>
+                                            <span className="text-sm font-bold text-gray-400">
+                                                {totalProcesos} {totalProcesos === 1 ? 'proceso' : 'procesos'}
+                                            </span>
+                                        </div>
+                                    </button>
+
+                                    {/* Contenido del Acordeón */}
+                                    {isExpanded && totalProcesos > 0 && (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left border-collapse min-w-[800px]">
+                                                <thead>
+                                                    <tr className="bg-white/[0.02] border-b border-white/10">
+                                                        <th className="p-5 text-xs font-black uppercase tracking-widest text-gray-600">OP</th>
+                                                        <th className="p-5 text-xs font-black uppercase tracking-widest text-gray-600">Producto</th>
+                                                        <th className="p-5 text-xs font-black uppercase tracking-widest text-gray-600">Etapa</th>
+                                                        <th className="p-5 text-xs font-black uppercase tracking-widest text-gray-600 text-center">Unidades Pendientes</th>
+                                                        <th className="p-5 text-xs font-black uppercase tracking-widest text-gray-600 text-center">Temporizador</th>
+                                                        <th className="p-5 text-xs font-black uppercase tracking-widest text-gray-600 text-right">Acciones</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-white/10">
+                                                    {procesosDelEstado.map((proceso) => (
+                                                        <tr
+                                                            key={proceso.id}
+                                                            className="hover:bg-white/[0.02] transition-colors group"
+                                                        >
+                                                            <td className="p-5 font-bold text-lg text-white">{proceso.ordenProduccion}</td>
+                                                            <td className="p-5">
+                                                                <div>
+                                                                    <div className="font-bold text-white max-w-[200px] truncate" title={proceso.producto}>{proceso.producto}</div>
+                                                                    <div className="text-xs text-gray-500 font-medium">Lote: {proceso.lote}</div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-5">
+                                                                <span className="bg-white/10 px-2 py-1 rounded text-sm font-mono text-gray-300">
+                                                                    {proceso.etapa || '-'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-5 text-center">
+                                                                <div className="flex flex-col items-center gap-1">
+                                                                    <span className="text-sm font-bold text-success-green">
+                                                                        {proceso.utilizaTemporizador ?
+                                                                            `${getUnidadesPendientes(proceso).toLocaleString('es-ES', { maximumFractionDigits: 1 })} / ${proceso.cantidadProducir}`
+                                                                            : 'N/A'
+                                                                        }
+                                                                    </span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-5 text-center">
+                                                                <div className="flex flex-col items-center gap-2">
+                                                                    {proceso.utilizaTemporizador ? (
+                                                                        <>
+                                                                            <span className={cn(
+                                                                                "text-lg font-bold font-mono transition-colors duration-500",
+                                                                                (() => {
+                                                                                    const { isGracePeriod, isTiempoExtra } = getEstadoTemporizador(proceso);
+                                                                                    if (isTiempoExtra) return 'text-danger-red animate-pulse';
+                                                                                    if (isGracePeriod) return 'text-warning-yellow';
+                                                                                    if (proceso.estado === 'Iniciado') return 'text-white';
+                                                                                    return 'text-gray-600';
+                                                                                })()
+                                                                            )}>
+                                                                                {getTiempoRestanteEstimado(proceso)}
+                                                                            </span>
+                                                                        </>
+                                                                    ) : (
+                                                                        <span className="text-lg font-bold font-mono text-gray-500">N/A</span>
+                                                                    )}
+                                                                    <span className={cn(
+                                                                        "text-xs font-medium px-2 py-0.5 rounded-full",
+                                                                        proceso.estado === 'Finalizado' ? 'bg-gray-700/30 text-gray-300' :
+                                                                            proceso.estado === 'Pausado' ? 'bg-warning-yellow/20 text-warning-yellow' :
+                                                                                proceso.estado === 'Iniciado' ? 'bg-success-green/20 text-success-green' :
+                                                                                    'bg-primary-blue/20 text-primary-blue'
+                                                                    )}>
+                                                                        {proceso.estado}
+                                                                    </span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-5 text-right flex items-center justify-end gap-2">
+                                                                {['superadmin', 'supervisor'].includes(user?.rol || '') && (
+                                                                    <button
+                                                                        onClick={() => setSharingProceso(proceso)}
+                                                                        className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 group transition-all"
+                                                                        title="Compartir visibilidad"
+                                                                    >
+                                                                        <Share2 className="h-5 w-5 group-hover:text-primary-blue" />
+                                                                    </button>
+                                                                )}
+                                                                <button
+                                                                    onClick={() => router.push(`/procesos/${proceso.id}`)}
+                                                                    className="bg-primary-blue/10 hover:bg-primary-blue text-primary-blue hover:text-white px-4 py-2 rounded-lg text-sm font-bold transition-all border border-primary-blue/20"
+                                                                >
+                                                                    ABRIR
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+
+                                    {isExpanded && totalProcesos === 0 && (
+                                        <div className="p-8 text-center text-gray-500">
+                                            <p className="font-medium">No hay procesos en este estado</p>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })
+                    )}
                 </div>
             </div>
             {/* MODAL DE COMPARTIR VISIBILIDAD */}

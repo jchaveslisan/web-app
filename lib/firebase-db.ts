@@ -187,7 +187,9 @@ export const getJustificaciones = async (tipo: 'pausa' | 'salida'): Promise<stri
         where('activo', '==', true)
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => (doc.data() as Justificacion).texto);
+    return snapshot.docs
+        .map(doc => (doc.data() as Justificacion).texto)
+        .sort((a, b) => a.localeCompare(b));
 };
 
 // --- ETAPAS ---
@@ -195,7 +197,7 @@ export const getEtapas = async (): Promise<Etapa[]> => {
     const q = query(
         collection(db, 'maestro_etapas'),
         where('activo', '==', true),
-        orderBy('codigo', 'asc')
+        orderBy('nombre', 'asc')
     );
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Etapa));
