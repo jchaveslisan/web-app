@@ -90,18 +90,27 @@ export default function MonitoreoPage() {
 
     // LÓGICA DE CÁLCULO DE PROGRESO TEÓRICO (CATCH-UP)
     useEffect(() => {
-        const isActuallyPaused = !proceso ||
-            proceso.estado !== 'Iniciado' ||
-            (proceso as any).pausadoPorFaltaDePersonal ||
-            (modalJustificacion.show && modalJustificacion.tipo === 'pausa');
-
-        if (isActuallyPaused) {
+        if (!proceso || proceso.estado === 'Finalizado') {
             if (proceso) setCalculatedUnits(proceso.trabajoCompletado || 0);
             return;
         }
 
+        // Casos donde el tiempo NO debe avanzar porque ya está pausado en base de datos
+        const isPausedInDB = proceso.estado !== 'Iniciado' || (proceso as any).pausadoPorFaltaDePersonal;
+
+        // Caso donde estamos pausando visualmente (abriendo el modal) pero el estado en DB sigue 'Iniciado'
+        const isVisualPause = (modalJustificacion.show && modalJustificacion.tipo === 'pausa');
+
+        if (isPausedInDB) {
+            // Sincronizar con el valor estático de la base de datos (se detiene el cálculo teórico)
+            setCalculatedUnits(proceso.trabajoCompletado || 0);
+            return;
+        }
+
+        // Si es una pausa visual, calculamos una última vez usando pauseMoment para congelar el valor exacto
+        // pero NO iniciamos el intervalo de actualización continua.
         const syncCalculatedUnits = () => {
-            const now = new Date();
+            const now = isVisualPause && pauseMoment ? pauseMoment : new Date();
             const lastUpdate = (proceso.ultimoUpdate as any)?.toDate
                 ? (proceso.ultimoUpdate as any).toDate()
                 : new Date(proceso.ultimoUpdate || Date.now());
@@ -120,9 +129,12 @@ export default function MonitoreoPage() {
         };
 
         syncCalculatedUnits();
-        const timerProgress = setInterval(syncCalculatedUnits, 1000);
-        return () => clearInterval(timerProgress);
-    }, [proceso?.id, proceso?.estado, (proceso as any)?.pausadoPorFaltaDePersonal, modalJustificacion.show, proceso?.ultimoUpdate, proceso?.trabajoCompletado, colaboradores, proceso?.velocidadTeorica]);
+
+        if (!isVisualPause) {
+            const timerProgress = setInterval(syncCalculatedUnits, 1000);
+            return () => clearInterval(timerProgress);
+        }
+    }, [proceso?.id, proceso?.estado, (proceso as any)?.pausadoPorFaltaDePersonal, modalJustificacion.show, pauseMoment, proceso?.ultimoUpdate, proceso?.trabajoCompletado, colaboradores, proceso?.velocidadTeorica]);
 
     useEffect(() => {
         if (!proceso) return;
