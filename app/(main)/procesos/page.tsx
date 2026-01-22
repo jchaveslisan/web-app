@@ -431,47 +431,72 @@ export default function ProcesosPage() {
                                 </h3>
                                 <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-1">Monitoreo de disponibilidad y asignaciones en tiempo real</p>
                             </div>
-                            <div className="p-8">
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {allColaboradores
-                                        .filter(c => c.nombreCompleto.toLowerCase().includes(searchTerm.toLowerCase()) || c.claveRegistro.includes(searchTerm))
-                                        .sort((a, b) => a.nombreCompleto.localeCompare(b.nombreCompleto))
-                                        .map(colab => {
-                                            const activeLog = activeLogs.find(l => l.colaboradorId === colab.id);
-                                            const activeProceso = activeLog ? procesos.find(p => p.id === activeLog.procesoId) : null;
+                            <div className="p-0">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-white/[0.02] border-b border-white/10">
+                                                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Colaborador</th>
+                                                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Identificación</th>
+                                                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-gray-500">Estado / Asignación</th>
+                                                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-gray-500 text-right">Acción</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5">
+                                            {allColaboradores
+                                                .filter(c => c.nombreCompleto.toLowerCase().includes(searchTerm.toLowerCase()) || c.claveRegistro.includes(searchTerm))
+                                                .sort((a, b) => {
+                                                    const activeA = activeLogs.some(l => l.colaboradorId === a.id) ? 1 : 0;
+                                                    const activeB = activeLogs.some(l => l.colaboradorId === b.id) ? 1 : 0;
+                                                    if (activeA !== activeB) return activeB - activeA; // Activos primero
+                                                    return a.nombreCompleto.localeCompare(b.nombreCompleto); // Luego alfabético
+                                                })
+                                                .map(colab => {
+                                                    const activeLog = activeLogs.find(l => l.colaboradorId === colab.id);
+                                                    const activeProceso = activeLog ? procesos.find(p => p.id === activeLog.procesoId) : null;
 
-                                            return (
-                                                <div key={colab.id} className="bg-white/5 border border-white/10 p-5 rounded-2xl flex items-center justify-between group transition-all hover:bg-white/[0.08]">
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-3 mb-1">
-                                                            <div className={cn(
-                                                                "h-2 w-2 rounded-full",
-                                                                activeProceso ? "bg-success-green animate-pulse" : "bg-gray-600"
-                                                            )} />
-                                                            <p className="font-bold text-white truncate uppercase text-sm tracking-tight">{colab.nombreCompleto}</p>
-                                                        </div>
-                                                        <p className="text-[10px] font-black text-gray-500 tracking-widest uppercase mb-3">ID: {colab.claveRegistro}</p>
-
-                                                        {activeProceso ? (
-                                                            <div className="flex flex-col gap-1">
-                                                                <span className="text-[9px] font-black text-primary-blue uppercase tracking-[0.2em]">ASIGNADO A:</span>
-                                                                <button
-                                                                    onClick={() => router.push(`/procesos/${activeProceso.id}`)}
-                                                                    className="text-xs font-bold text-white bg-primary-blue/20 hover:bg-primary-blue/30 border border-primary-blue/30 px-3 py-1.5 rounded-lg text-left truncate transition-all flex items-center gap-2"
-                                                                >
-                                                                    <div className="w-1 h-1 bg-primary-blue rounded-full" />
-                                                                    OP: {activeProceso.ordenProduccion} - {activeProceso.producto}
-                                                                </button>
-                                                            </div>
-                                                        ) : (
-                                                            <span className="inline-flex items-center px-3 py-1 rounded-lg bg-white/5 border border-white/10 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                                                LIBRE / SIN ASIGNAR
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
+                                                    return (
+                                                        <tr key={colab.id} className="hover:bg-white/[0.02] transition-colors group">
+                                                            <td className="p-5">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className={cn(
+                                                                        "h-2 w-2 rounded-full",
+                                                                        activeProceso ? "bg-success-green animate-pulse" : "bg-gray-600"
+                                                                    )} />
+                                                                    <span className="font-bold text-white uppercase text-sm tracking-tight">{colab.nombreCompleto}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-5">
+                                                                <span className="text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase">{colab.claveRegistro}</span>
+                                                            </td>
+                                                            <td className="p-5">
+                                                                {activeProceso ? (
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="text-[9px] font-black bg-success-green/20 text-success-green px-2 py-0.5 rounded-full uppercase tracking-widest border border-success-green/20">EN LÍNEA</span>
+                                                                            <span className="text-[11px] font-bold text-white">OP: {activeProceso.ordenProduccion}</span>
+                                                                        </div>
+                                                                        <p className="text-[10px] font-medium text-gray-500 truncate max-w-[200px] uppercase">{activeProceso.producto}</p>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-[9px] font-black bg-white/5 text-gray-500 px-2 py-0.5 rounded-full uppercase tracking-widest border border-white/10">DISPONIBLE</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="p-5 text-right">
+                                                                {activeProceso && (
+                                                                    <button
+                                                                        onClick={() => router.push(`/procesos/${activeProceso.id}`)}
+                                                                        className="opacity-0 group-hover:opacity-100 bg-primary-blue hover:bg-blue-600 text-white px-4 py-2 rounded-xl text-[10px] font-black transition-all uppercase tracking-widest shadow-lg shadow-blue-500/10"
+                                                                    >
+                                                                        ABRIR MONITOR
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                        </tbody>
+                                    </table>
                                 </div>
                                 {allColaboradores.length === 0 && (
                                     <div className="py-20 text-center">
