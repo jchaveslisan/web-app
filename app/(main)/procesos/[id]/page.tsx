@@ -94,6 +94,8 @@ export default function MonitoreoPage() {
     const [pendingExitLog, setPendingExitLog] = useState<{ id: string, nombre: string, mensaje?: string } | null>(null);
     const [showModalBulkExit, setShowModalBulkExit] = useState(false);
     const [calidadTimerStr, setCalidadTimerStr] = useState("00:00:00");
+    const [reprocesoTimerStr, setReprocesoTimerStr] = useState("00:00:00");
+    const [showReprocesoModal, setShowReprocesoModal] = useState(false);
     const [pauseMoment, setPauseMoment] = useState<Date | null>(null);
     const [showEditModal, setShowEditModal] = useState(false);
 
@@ -165,8 +167,6 @@ export default function MonitoreoPage() {
                 (modalJustificacion.show && modalJustificacion.tipo === 'pausa');
 
             // Reference time para los cálculos de productividad
-            // Si el modal está abierto, congelamos visualmente en pauseMoment
-            // Si está pausado en DB, calculateProductivity usará proceso.ultimoUpdate por defecto
             const effectiveNow = (modalJustificacion.show && modalJustificacion.tipo === 'pausa' && pauseMoment)
                 ? pauseMoment
                 : now;
@@ -202,6 +202,17 @@ export default function MonitoreoPage() {
                 setCalidadTimerStr(formatSeconds(duracion));
             }
 
+            // Reloj de Reproceso
+            if (proceso.reprocesoEstado === 'en curso' && proceso.reprocesoStartTime) {
+                const start = (proceso.reprocesoStartTime as any).toDate ? (proceso.reprocesoStartTime as any).toDate() : new Date(proceso.reprocesoStartTime);
+                const duracion = Math.max(0, differenceInSeconds(new Date(), start));
+                const total = (proceso.tiempoReprocesoSegundos || 0) + duracion;
+                setReprocesoTimerStr(formatSeconds(total));
+            } else {
+                const total = proceso.tiempoReprocesoSegundos || 0;
+                setReprocesoTimerStr(formatSeconds(total));
+            }
+
             // AUTO-ACTIVACIÓN DEL PERÍODO DE GRACIA
             if (proceso.estado === 'Iniciado' && !proceso.inicioPeriodoGracia && (proceso.cantidadProducir - calculatedUnits <= 0)) {
                 updateProceso(id, {
@@ -223,8 +234,6 @@ export default function MonitoreoPage() {
 
         if (modalJustificacion.tipo === 'pausa') {
             const now = new Date();
-            // Usar el momento en que se abrió el modal para que el 'ultimoUpdate' en DB
-            // coincida perfectamente con el momento en que se congeló el reloj visualmente
             const effectivePauseTime = pauseMoment || now;
 
             await updateProceso(id, {
@@ -240,18 +249,15 @@ export default function MonitoreoPage() {
                 await updateDoc(docRef, {
                     horaSalida: Timestamp.now()
                 });
-                // Al cambiar personal, sincronizamos las unidades calculadas y el tiempo
                 const updatesToProcess: any = {
                     trabajoCompletado: calculatedUnits,
                     ultimoUpdate: Timestamp.now()
                 };
 
-                // Auto-pausar cuando no queda personal (independiente del tipo de proceso)
                 const personalRestante = colaboradores.filter(c => c.id !== pendingExitLog.id && !c.horaSalida).length;
-                const tipoActual = getTipoProcesoReal(proceso);
                 if (proceso.estado === 'Iniciado' && personalRestante === 0) {
                     updatesToProcess.estado = 'Pausado';
-                    updatesToProcess.pausadoPorFaltaDePersonal = true; // Marcar como pausa automática
+                    updatesToProcess.pausadoPorFaltaDePersonal = true;
                 }
 
                 await updateProceso(id, updatesToProcess);
@@ -338,6 +344,30 @@ export default function MonitoreoPage() {
         }
     };
 
+    const handleReprocesoAction = async (action: 'start' | 'finish') => {
+        if (!proceso) return;
+        try {
+            const updates: any = {};
+            if (action === 'start') {
+                updates.reprocesoEstado = 'en curso';
+                updates.reprocesoStartTime = Timestamp.now();
+                await addEventoLog(id, "Reproceso Iniciado", "Inicio de medición de reproceso", "REPROCESO", user?.username || 'sistema');
+                setShowReprocesoModal(true);
+            } else if (action === 'finish') {
+                const start = (proceso.reprocesoStartTime as any).toDate ? (proceso.reprocesoStartTime as any).toDate() : new Date(proceso.reprocesoStartTime);
+                const duracion = Math.max(0, differenceInSeconds(new Date(), start));
+                updates.tiempoReprocesoSegundos = (proceso.tiempoReprocesoSegundos || 0) + duracion;
+                updates.reprocesoEstado = 'finalizado';
+                updates.reprocesoStartTime = null;
+                await addEventoLog(id, "Reproceso Finalizado", `Duración total acumulada: ${reprocesoTimerStr}`, "REPROCESO", user?.username || 'sistema');
+                setShowReprocesoModal(false);
+            }
+            await updateProceso(id, updates);
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
     const handleToggleEstado = async () => {
         if (!proceso || proceso.estado === 'Finalizado') return;
 
@@ -351,9 +381,6 @@ export default function MonitoreoPage() {
                 ultimoUpdate: Timestamp.fromDate(now)
             };
 
-            // COMPENSACIÓN DE TIEMPO DE GRACIA:
-            // Si el proceso estaba en periodo de gracia, debemos mover el inicio de dicho periodo
-            // hacia adelante tanto tiempo como el proceso estuvo pausado.
             if (proceso.inicioPeriodoGracia && proceso.ultimoUpdate) {
                 const pauseStart = (proceso.ultimoUpdate as any).toDate?.() || new Date(proceso.ultimoUpdate);
                 const pauseDuration = differenceInSeconds(now, pauseStart);
@@ -396,14 +423,12 @@ export default function MonitoreoPage() {
         try {
             const now = Timestamp.now();
 
-            // 1. Finalizar el proceso
             await updateProceso(id, {
                 estado: 'Finalizado',
                 horaFinReal: now,
-                trabajoCompletado: calculatedUnits // Sincronizamos final
+                trabajoCompletado: calculatedUnits
             });
 
-            // 2. Marcar salida de todo el personal activo
             const activos = colaboradores.filter(c => !c.horaSalida);
             for (const colab of activos) {
                 await updateDoc(doc(db, 'colaboradores_log', colab.id), {
@@ -800,6 +825,20 @@ export default function MonitoreoPage() {
                                             onClick={handleFinalizarProceso}
                                         >
                                             <Square className="h-6 w-6 md:h-7 md:w-7 fill-current" /> TERMINAR
+                                        </button>
+                                    )}
+                                    {proceso.estado === 'Finalizado' && (
+                                        <button
+                                            className="w-full sm:w-auto bg-amber-500/10 hover:bg-amber-500 hover:text-black text-amber-500 border border-amber-500/20 px-8 md:px-12 py-4 md:py-5 rounded-3xl font-black text-lg md:text-xl flex items-center justify-center gap-4 transition-all shadow-lg shadow-amber-500/10"
+                                            onClick={() => {
+                                                if (proceso.reprocesoEstado === 'en curso') {
+                                                    setShowReprocesoModal(true);
+                                                } else {
+                                                    handleReprocesoAction('start');
+                                                }
+                                            }}
+                                        >
+                                            <History className="h-6 w-6 md:h-7 md:w-7" /> {proceso.reprocesoEstado === 'en curso' ? 'REPROCESO (EN CURSO)' : 'CRONOMETRAR REPROCESO'}
                                         </button>
                                     )}
                                 </>
@@ -1335,6 +1374,39 @@ export default function MonitoreoPage() {
                     />
                 )
             }
+
+            {/* MODAL DE REPROCESO */}
+            {showReprocesoModal && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
+                    <div className="glass w-full max-w-2xl rounded-[3rem] overflow-hidden flex flex-col border-white/10 shadow-2xl animate-in zoom-in duration-300">
+                        <div className="p-8 md:p-12 border-b border-white/10 flex flex-col items-center text-center bg-white/5">
+                            <History className="h-16 w-16 text-amber-500 mb-6 animate-pulse" />
+                            <h3 className="text-3xl font-black uppercase tracking-tighter mb-2">CRONÓMETRO DE REPROCESO</h3>
+                            <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Midiéndo tiempo de corrección post-producción</p>
+                        </div>
+                        <div className="p-12 md:p-20 flex flex-col items-center space-y-12">
+                            <div className="text-8xl md:text-9xl font-black font-mono tracking-tighter text-white drop-shadow-[0_0_30px_rgba(251,191,36,0.2)]">
+                                {reprocesoTimerStr}
+                            </div>
+
+                            <div className="w-full flex flex-col md:flex-row gap-4">
+                                <button
+                                    onClick={() => handleReprocesoAction('finish')}
+                                    className="flex-1 bg-amber-500 text-black font-black py-6 rounded-3xl text-xl flex items-center justify-center gap-4 hover:bg-amber-400 transition-all shadow-xl shadow-amber-500/20"
+                                >
+                                    <Check className="h-8 w-8" /> TERMINAR REPROCESO
+                                </button>
+                                <button
+                                    onClick={() => setShowReprocesoModal(false)}
+                                    className="px-10 bg-white/5 text-white font-black py-6 rounded-3xl text-xl hover:bg-white/10 transition-all border border-white/10"
+                                >
+                                    CERRAR VISTA
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 }

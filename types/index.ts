@@ -58,6 +58,9 @@ export interface Proceso {
     calidadLlamadaEn?: any;
     calidadLlegadaEn?: any;
     calidadAprobadaEn?: any;
+    reprocesoEstado?: 'ninguno' | 'en curso' | 'finalizado';
+    reprocesoStartTime?: any;
+    tiempoReprocesoSegundos?: number;
 }
 
 export interface ColaboradorLog {
