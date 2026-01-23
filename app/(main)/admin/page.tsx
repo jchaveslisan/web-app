@@ -265,6 +265,55 @@ export default function AdminPage() {
                 columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 } }
             });
 
+            // 2.1 CATEGORIZACIÓN DE TIEMPOS
+            const setupTotal = procesosOP.reduce((acc, p) => acc + (p.tiempoSetupSegundos || 0), 0);
+            const reprocesoTotal = procesosOP.reduce((acc, p) => acc + (p.tiempoReprocesoSegundos || 0), 0);
+
+            // Tiempos de Calidad
+            let waitingQualitySecs = 0;
+            let inspectionQualitySecs = 0;
+            procesosOP.forEach(p => {
+                const call = p.calidadLlamadaEn?.toMillis();
+                const arrival = p.calidadLlegadaEn?.toMillis();
+                const approval = p.calidadAprobadaEn?.toMillis();
+                if (call && arrival) waitingQualitySecs += (arrival - call) / 1000;
+                if (arrival && approval) inspectionQualitySecs += (approval - arrival) / 1000;
+            });
+
+            // Desglose de pausas por motivo
+            const pauseDetails: Record<string, number> = {};
+            let localPauseStart: { time: number, reason: string } | null = null;
+            sortedEvents.forEach(evt => {
+                if (evt.evento.includes('PAUSA')) {
+                    localPauseStart = {
+                        time: evt.horaEvento?.toMillis(),
+                        reason: evt.justificacion || 'SIN ESPECIFICAR'
+                    };
+                }
+                if (evt.evento.includes('REANUDACIÓN') && localPauseStart) {
+                    const dur = (evt.horaEvento.toMillis() - localPauseStart.time) / 1000;
+                    pauseDetails[localPauseStart.reason] = (pauseDetails[localPauseStart.reason] || 0) + dur;
+                    localPauseStart = null;
+                }
+            });
+
+            doc.setFontSize(14);
+            doc.text('ANÁLISIS DE TIEMPOS PRODUCTIVOS Y PAUSAS', 20, (doc as any).lastAutoTable.finalY + 15);
+            autoTable(doc, {
+                startY: (doc as any).lastAutoTable.finalY + 20,
+                head: [['Categoría / Motivo', 'Duración Acumulada']],
+                body: [
+                    ['[PROD] TIEMPO TOTAL SETUP', formatDuration(setupTotal)],
+                    ['[PROD] TIEMPO TOTAL REPROCESO', formatDuration(reprocesoTotal)],
+                    ['[CALI] ESPERA POR CALIDAD', formatDuration(waitingQualitySecs)],
+                    ['[CALI] INSPECCIÓN DE CALIDAD', formatDuration(inspectionQualitySecs)],
+                    ...Object.entries(pauseDetails).map(([reason, time]) => [`[PAUSA] ${reason}`, formatDuration(time)])
+                ],
+                theme: 'striped',
+                headStyles: { fillColor: [30, 41, 59] },
+                styles: { fontSize: 9 }
+            });
+
             // 3. RESUMEN COLABORADORES
             doc.setFontSize(14);
             doc.text('TIEMPO TOTAL POR COLABORADOR', 20, (doc as any).lastAutoTable.finalY + 15);

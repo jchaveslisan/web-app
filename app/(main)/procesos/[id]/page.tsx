@@ -311,7 +311,17 @@ export default function MonitoreoPage() {
                 updates.setupEstado = 'finalizado';
                 updates.tiempoSetupSegundos = total;
                 updates.setupStartTime = null;
-                await addEventoLog(id, "Setup Finalizado", `Duración total: ${setupTimerStr}`, "SETUP", user?.username || 'sistema');
+
+                // Salida automática de personal al terminar setup
+                const now = Timestamp.now();
+                const activos = colaboradores.filter(c => !c.horaSalida);
+                for (const colab of activos) {
+                    await updateDoc(doc(db, 'colaboradores_log', colab.id), {
+                        horaSalida: now
+                    });
+                }
+
+                await addEventoLog(id, "Setup Finalizado", `Duración total: ${setupTimerStr}. Salida automática de ${activos.length} colaboradores para registro de tiempos.`, "SETUP", user?.username || 'sistema');
             }
             await updateProceso(id, updates);
         } catch (error) {
