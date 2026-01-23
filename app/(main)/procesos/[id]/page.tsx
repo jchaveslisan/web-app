@@ -165,7 +165,7 @@ export default function MonitoreoPage() {
             const now = new Date();
 
             // Determinar si el proceso está EFECTIVAMENTE pausado (localmente)
-            const isActuallyPaused = (proceso.estado !== 'Iniciado' && proceso.estado !== 'Registrado') ||
+            const isActuallyPaused = proceso.estado === 'Pausado' ||
                 (proceso as any).pausadoPorFaltaDePersonal ||
                 (modalJustificacion.show && modalJustificacion.tipo === 'pausa');
 
