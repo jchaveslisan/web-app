@@ -519,13 +519,14 @@ export default function MonitoreoPage() {
 
     const handleConfirmStaffEntry = async (tipo: 'colaborador' | 'apoyo', maestroToAdd?: ColaboradorMaestro) => {
         const maestroActual = maestroToAdd || pendingStaffMaestro;
-        if (!maestroActual || !proceso || staffActionLoading) return;
+        if (!maestroActual || !proceso) return;
 
         // Verificación de seguridad: ¿Ya está activo? (Evita duplicados por doble click)
         const yaEstaActivo = colaboradores.some(c => c.colaboradorId === maestroActual.id && !c.horaSalida);
         if (yaEstaActivo) {
             setShowStaffTypeModal(false);
             setPendingStaffMaestro(null);
+            setStaffActionLoading(false);
             return;
         }
 
@@ -596,6 +597,7 @@ export default function MonitoreoPage() {
         } finally {
             setShowStaffTypeModal(false);
             setPendingStaffMaestro(null);
+            setStaffActionLoading(false);
         }
     };
 
