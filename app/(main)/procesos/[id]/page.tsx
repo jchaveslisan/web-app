@@ -918,7 +918,7 @@ export default function MonitoreoPage() {
                                         <UserPlus className="h-5 w-5" /> Registrar Accion
                                     </button>
                                     {/* BULK EXIT BUTTON */}
-                                    {['supervisor', 'superadmin'].includes(user?.rol || '') && personalActivo > 0 && proceso.estado === 'Pausado' && (
+                                    {personalActivo > 0 && proceso.estado === 'Pausado' && (
                                         <button
                                             onClick={() => setShowModalBulkExit(true)}
                                             disabled={(proceso.estado as string) === 'Finalizado'}
