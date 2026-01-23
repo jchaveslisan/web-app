@@ -220,13 +220,22 @@ export default function AdminPage() {
                 });
             }
 
-            // Calcular pausas desde los eventos
-            const sortedEvents = allEvents.sort((a, b) => (a.horaEvento?.toMillis() || 0) - (b.horaEvento?.toMillis() || 0));
+            // Helper para obtener milisegundos de un Timestamp de forma segura
+            const getMs = (ts: any) => {
+                if (!ts) return 0;
+                if (typeof ts.toMillis === 'function') return ts.toMillis();
+                if (ts.seconds !== undefined) return ts.seconds * 1000 + (ts.nanoseconds || 0) / 1000000;
+                return 0;
+            };
+
+            // Calcular pausas desde los eventos para el resumen ejecutivo
+            const sortedEvents = allEvents.sort((a, b) => getMs(a.horaEvento) - getMs(b.horaEvento));
             let pauseStart: number | null = null;
             sortedEvents.forEach(evt => {
-                if (evt.evento.includes('PAUSA')) pauseStart = evt.horaEvento?.toMillis();
-                if (evt.evento.includes('REANUDACIÓN') && pauseStart) {
-                    totalPauseDuration += Math.floor((evt.horaEvento.toMillis() - pauseStart) / 1000);
+                const eventText = (evt.evento || "").toUpperCase();
+                if (eventText.includes('PAUSA')) pauseStart = getMs(evt.horaEvento);
+                if (eventText.includes('REANUDA') && pauseStart) {
+                    totalPauseDuration += Math.floor((getMs(evt.horaEvento) - pauseStart) / 1000);
                     pauseStart = null;
                 }
             });
@@ -273,25 +282,26 @@ export default function AdminPage() {
             let waitingQualitySecs = 0;
             let inspectionQualitySecs = 0;
             procesosOP.forEach(p => {
-                const call = p.calidadLlamadaEn?.toMillis();
-                const arrival = p.calidadLlegadaEn?.toMillis();
-                const approval = p.calidadAprobadaEn?.toMillis();
-                if (call && arrival) waitingQualitySecs += (arrival - call) / 1000;
-                if (arrival && approval) inspectionQualitySecs += (approval - arrival) / 1000;
+                const call = getMs(p.calidadLlamadaEn);
+                const arrival = getMs(p.calidadLlegadaEn);
+                const approval = getMs(p.calidadAprobadaEn);
+                if (call > 0 && arrival > 0) waitingQualitySecs += (arrival - call) / 1000;
+                if (arrival > 0 && approval > 0) inspectionQualitySecs += (approval - arrival) / 1000;
             });
 
             // Desglose de pausas por motivo
             const pauseDetails: Record<string, number> = {};
             let localPauseStart: { time: number, reason: string } | null = null;
             sortedEvents.forEach(evt => {
-                if (evt.evento.includes('PAUSA')) {
+                const eventText = (evt.evento || "").toUpperCase();
+                if (eventText.includes('PAUSA')) {
                     localPauseStart = {
-                        time: evt.horaEvento?.toMillis(),
+                        time: getMs(evt.horaEvento),
                         reason: evt.justificacion || 'SIN ESPECIFICAR'
                     };
                 }
-                if (evt.evento.includes('REANUDACIÓN') && localPauseStart) {
-                    const dur = (evt.horaEvento.toMillis() - localPauseStart.time) / 1000;
+                if (eventText.includes('REANUDA') && localPauseStart) {
+                    const dur = (getMs(evt.horaEvento) - localPauseStart.time) / 1000;
                     pauseDetails[localPauseStart.reason] = (pauseDetails[localPauseStart.reason] || 0) + dur;
                     localPauseStart = null;
                 }
