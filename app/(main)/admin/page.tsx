@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { format } from 'date-fns';
 import {
     ArrowLeft,
     Users,
@@ -13,21 +16,28 @@ import {
     Pause,
     LogOut,
     Settings,
-    Key
+    Key,
+    ClipboardList,
+    FileText,
+    RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/auth-service';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, where } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { ColaboradorMaestro, Justificacion, Etapa, User, UserRole } from '@/types';
+import { ColaboradorMaestro, Justificacion, Etapa, User, UserRole, OrdenMaestra } from '@/types';
 
 export default function AdminPage() {
-    const [tab, setTab] = useState<'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios'>('personal');
+    const [tab, setTab] = useState<'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios' | 'ordenes' | 'reportes'>('personal');
     const [colaboradores, setColaboradores] = useState<ColaboradorMaestro[]>([]);
     const [justificacionesPausa, setJustificacionesPausa] = useState<Justificacion[]>([]);
     const [justificacionesSalida, setJustificacionesSalida] = useState<Justificacion[]>([]);
     const [etapas, setEtapas] = useState<Etapa[]>([]);
     const [usuarios, setUsuarios] = useState<User[]>([]);
+    const [ordenes, setOrdenes] = useState<OrdenMaestra[]>([]);
+    const [allProcesos, setAllProcesos] = useState<any[]>([]);
+    const [selectedRepoOP, setSelectedRepoOP] = useState('');
+    const [isGenerating, setIsGenerating] = useState(false);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [newNombre, setNewNombre] = useState('');
@@ -47,6 +57,14 @@ export default function AdminPage() {
     const [newMensajeEntrada, setNewMensajeEntrada] = useState('');
     const [newMensajeSalida, setNewMensajeSalida] = useState('');
 
+    // Ordenes Maestras Form
+    const [newOrderOP, setNewOrderOP] = useState('');
+    const [newOrderProduct, setNewOrderProduct] = useState('');
+    const [newOrderLote, setNewOrderLote] = useState('');
+    const [newOrderEtapa, setNewOrderEtapa] = useState('');
+    const [newOrderCantidad, setNewOrderCantidad] = useState(0);
+    const [newOrderVelocidad, setNewOrderVelocidad] = useState(0);
+
     // For editing
     const [editValue, setEditValue] = useState<any>({});
 
@@ -54,7 +72,7 @@ export default function AdminPage() {
 
     // Protección de ruta admistrativa - Solo Superadmin
     useEffect(() => {
-        if (!loading && (!user || user.rol !== 'superadmin')) {
+        if (!loading && (!user || !['superadmin', 'supervisor'].includes(user.rol))) {
             router.push('/procesos');
         }
     }, [user, loading, router]);
@@ -106,6 +124,138 @@ export default function AdminPage() {
         });
         return () => unsubscribe();
     }, []);
+
+    // Cargar Ordenes Maestras
+    useEffect(() => {
+        const q = query(collection(db, 'maestro_ordenes'), where('activo', '==', true), orderBy('op', 'asc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OrdenMaestra));
+            setOrdenes(data);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const handleAddOrder = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newOrderOP || !newOrderProduct) return;
+        try {
+            await addDoc(collection(db, 'maestro_ordenes'), {
+                op: newOrderOP.toUpperCase(),
+                producto: newOrderProduct,
+                lote: newOrderLote,
+                etapa: newOrderEtapa,
+                cantidad: newOrderCantidad,
+                velocidadTeorica: newOrderVelocidad,
+                activo: true
+            });
+            setNewOrderOP('');
+            setNewOrderProduct('');
+            setNewOrderLote('');
+            setNewOrderEtapa('');
+            setNewOrderCantidad(0);
+            setNewOrderVelocidad(0);
+            setShowForm(false);
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    // Cargar todos los procesos para reportes
+    useEffect(() => {
+        const q = query(collection(db, 'procesos'), orderBy('creadoEn', 'desc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setAllProcesos(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const generatePDF = async () => {
+        if (!selectedRepoOP) return;
+        setIsGenerating(true);
+        try {
+            const procesosOP = allProcesos.filter(p => p.ordenProduccion === selectedRepoOP);
+            if (procesosOP.length === 0) {
+                alert("No hay procesos registrados para esta OP");
+                return;
+            }
+
+            const doc = new jsPDF();
+
+            // Header
+            doc.setFillColor(0, 102, 204);
+            doc.rect(0, 0, 210, 40, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(22);
+            doc.text('REPORTE DE PRODUCCIÓN', 105, 20, { align: 'center' });
+            doc.setFontSize(10);
+            doc.text(`Generado el: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 105, 30, { align: 'center' });
+
+            // OP Info
+            doc.setTextColor(0, 0, 0);
+            doc.setFontSize(14);
+            doc.text(`ORDEN DE PRODUCCIÓN: ${selectedRepoOP}`, 20, 55);
+            doc.setFontSize(11);
+            doc.text(`Producto: ${procesosOP[0].producto}`, 20, 65);
+            doc.text(`Lote: ${procesosOP[0].lote}`, 20, 72);
+
+            let yPos = 85;
+
+            for (const proceso of procesosOP) {
+                doc.setFontSize(12);
+                doc.setTextColor(0, 102, 204);
+                doc.text(`Etapa: ${proceso.etapa || 'N/A'}`, 20, yPos);
+                yPos += 7;
+
+                // Fetch logs for this process - Usando getDocs para asegurar datos al momento
+                const qLogs = query(collection(db, 'colaboradores_log'), where('procesoId', '==', proceso.id));
+                const snapLogs = await getDocs(qLogs);
+                const logs = snapLogs.docs.map(d => d.data());
+
+                const tableData = logs.map((log: any) => {
+                    const ingreso = log.horaIngreso?.toDate();
+                    const salida = log.horaSalida?.toDate();
+                    let duracion = '-';
+                    if (ingreso && salida) {
+                        const diffSecs = Math.floor((salida.getTime() - ingreso.getTime()) / 1000);
+                        const h = Math.floor(diffSecs / 3600);
+                        const m = Math.floor((diffSecs % 3600) / 60);
+                        const s = diffSecs % 60;
+                        duracion = `${h}h ${m}m ${s}s`;
+                    }
+                    return [
+                        log.nombreColaborador || 'Desc.',
+                        log.tipo === 'colaborador' ? 'DIRECTO' : 'SOLO SETUP',
+                        ingreso ? format(ingreso, 'HH:mm:ss') : '-',
+                        salida ? format(salida, 'HH:mm:ss') : 'En curso',
+                        duracion
+                    ];
+                });
+
+                autoTable(doc, {
+                    startY: yPos,
+                    head: [['Colaborador', 'Tipo', 'Ingreso', 'Salida', 'Duración']],
+                    body: tableData,
+                    theme: 'grid',
+                    headStyles: { fillColor: [0, 102, 204] },
+                    margin: { left: 20, right: 20 }
+                });
+
+                yPos = (doc as any).lastAutoTable.finalY + 15;
+                if (yPos > 250) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+            }
+
+            doc.save(`Reporte_OP_${selectedRepoOP}.pdf`);
+
+        } catch (error) {
+            console.error(error);
+            alert("Error al generar PDF");
+        } finally {
+            setIsGenerating(false);
+        }
+    };
 
     const handleAddColaborador = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -195,6 +345,7 @@ export default function AdminPage() {
                 case 'salida': collectionName = 'maestro_justificaciones'; break;
                 case 'etapa': collectionName = 'maestro_etapas'; break;
                 case 'usuario': collectionName = 'usuarios'; break;
+                case 'orden': collectionName = 'maestro_ordenes'; break;
             }
 
             await updateDoc(doc(db, collectionName, editingItem.id), editValue);
@@ -309,6 +460,28 @@ export default function AdminPage() {
                     )}
                 >
                     <Users className="h-5 w-5" /> Usuarios
+                </button>
+                <button
+                    onClick={() => { setTab('ordenes'); setShowForm(false); }}
+                    className={cn(
+                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
+                        tab === 'ordenes'
+                            ? "border-primary-blue text-primary-blue"
+                            : "border-transparent text-gray-400 hover:text-white"
+                    )}
+                >
+                    <ClipboardList className="h-5 w-5" /> Ordenes OP
+                </button>
+                <button
+                    onClick={() => { setTab('reportes'); setShowForm(false); }}
+                    className={cn(
+                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
+                        tab === 'reportes'
+                            ? "border-accent-purple text-accent-purple"
+                            : "border-transparent text-gray-400 hover:text-white"
+                    )}
+                >
+                    <FileText className="h-5 w-5" /> Reportes
                 </button>
             </div>
 
@@ -853,6 +1026,197 @@ export default function AdminPage() {
                         </div>
                     </>
                 )}
+                {/* TAB: ORDENES MAESTRAS */}
+                {tab === 'ordenes' && (
+                    <>
+                        <div className="flex items-center justify-between mb-8">
+                            <h2 className="text-xl font-black uppercase tracking-widest text-primary-blue">Ordenes de Producción Maestras</h2>
+                            <button
+                                onClick={() => setShowForm(!showForm)}
+                                className="flex items-center gap-2 bg-primary-blue hover:bg-blue-600 px-6 py-3 rounded-xl font-bold transition-all text-white shadow-lg shadow-blue-500/20"
+                            >
+                                {showForm ? <X className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+                                {showForm ? "CANCELAR" : "CARGAR ORDEN"}
+                            </button>
+                        </div>
+
+                        {showForm && (
+                            <form onSubmit={handleAddOrder} className="glass p-8 rounded-[2.5rem] mb-8 border border-primary-blue/30 animate-in fade-in slide-in-from-top-4 duration-300">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="md:col-span-1">
+                                        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Orden de Producción (OP)</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-5 font-bold focus:ring-2 focus:ring-primary-blue outline-none transition-all"
+                                            value={newOrderOP}
+                                            onChange={(e) => setNewOrderOP(e.target.value)}
+                                            placeholder="Ej: OP-2024-001"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Producto</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-5 font-bold focus:ring-2 focus:ring-primary-blue outline-none transition-all"
+                                            value={newOrderProduct}
+                                            onChange={(e) => setNewOrderProduct(e.target.value)}
+                                            placeholder="Nombre del producto"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Lote</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-5 font-bold focus:ring-2 focus:ring-primary-blue outline-none transition-all"
+                                            value={newOrderLote}
+                                            onChange={(e) => setNewOrderLote(e.target.value)}
+                                            placeholder="Ej: L-2345"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Etapa por defecto</label>
+                                        <select
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-5 font-bold focus:ring-2 focus:ring-primary-blue outline-none transition-all"
+                                            value={newOrderEtapa}
+                                            onChange={(e) => setNewOrderEtapa(e.target.value)}
+                                        >
+                                            <option value="">Seleccione etapa...</option>
+                                            {etapas.map(e => <option key={e.id} value={e.nombre}>{e.nombre}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Cantidad Total</label>
+                                        <input
+                                            type="number"
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-5 font-bold focus:ring-2 focus:ring-primary-blue outline-none transition-all"
+                                            value={newOrderCantidad}
+                                            onChange={(e) => setNewOrderCantidad(Number(e.target.value))}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Velocidad Teórica (Unid/Eq/Min)</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-5 font-bold focus:ring-2 focus:ring-primary-blue outline-none transition-all"
+                                            value={newOrderVelocidad}
+                                            onChange={(e) => setNewOrderVelocidad(Number(e.target.value))}
+                                        />
+                                    </div>
+                                </div>
+                                <button type="submit" className="mt-8 w-full bg-success-green text-black font-black py-5 rounded-2xl flex items-center justify-center gap-3 shadow-xl shadow-success-green/10 hover:bg-green-400 transition-all">
+                                    <Check className="h-6 w-6" /> GUARDAR ORDEN MAESTRA
+                                </button>
+                            </form>
+                        )}
+
+                        <div className="glass rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead>
+                                        <tr className="bg-white/5 border-b border-white/10">
+                                            <th className="p-6 text-[10px] font-black uppercase tracking-widest text-gray-500">OP</th>
+                                            <th className="p-6 text-[10px] font-black uppercase tracking-widest text-gray-500">Producto</th>
+                                            <th className="p-6 text-[10px] font-black uppercase tracking-widest text-gray-500 text-center">Cant / Vel</th>
+                                            <th className="p-6 text-right text-[10px] font-black uppercase tracking-widest text-gray-500">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5">
+                                        {ordenes.map((o) => (
+                                            <tr key={o.id} className="hover:bg-white/[0.02] transition-colors group">
+                                                <td className="p-6">
+                                                    <span className="font-black text-primary-blue text-lg tracking-tight">{o.op}</span>
+                                                    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Lote: {o.lote || 'N/A'}</div>
+                                                </td>
+                                                <td className="p-6">
+                                                    <div className="font-bold text-white uppercase">{o.producto}</div>
+                                                    <div className="text-[10px] text-gray-500 mt-1">Etapa: {o.etapa || 'No def.'}</div>
+                                                </td>
+                                                <td className="p-6 text-center">
+                                                    <div className="inline-flex flex-col items-center">
+                                                        <span className="font-black text-white text-sm">{o.cantidad.toLocaleString()}</span>
+                                                        <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest">{o.velocidadTeorica} u/min/p</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-6 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingItem({ id: o.id, type: 'orden', data: o });
+                                                                setEditValue({ ...o });
+                                                            }}
+                                                            className="p-3 hover:bg-white/10 text-gray-400 rounded-xl transition-all"
+                                                        >
+                                                            <Edit2 className="h-5 w-5" />
+                                                        </button>
+                                                        <button onClick={() => handleDelete(o.id, 'maestro_ordenes')} className="p-3 hover:bg-danger-red/10 text-danger-red rounded-xl transition-all">
+                                                            <Trash2 className="h-5 w-5" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {ordenes.length === 0 && <div className="p-20 text-center text-gray-600 font-bold uppercase tracking-widest italic">No hay órdenes maestras cargadas</div>}
+                        </div>
+                    </>
+                )}
+
+                {/* TAB: REPORTES */}
+                {tab === 'reportes' && (
+                    <>
+                        <div className="mb-10 text-center">
+                            <h2 className="text-3xl font-black uppercase tracking-tight text-accent-purple mb-4">Generador de Reportes</h2>
+                            <p className="text-gray-400 font-medium">Seleccione una Orden de Producción para descargar el historial de tiempos</p>
+                        </div>
+
+                        <div className="glass p-12 rounded-[3rem] border border-white/10 shadow-2xl max-w-2xl mx-auto flex flex-col items-center gap-10">
+                            <div className="w-full space-y-4">
+                                <label className="block text-xs font-black uppercase tracking-[0.2em] text-gray-500 text-center mb-4">Orden de Producción</label>
+                                <select
+                                    value={selectedRepoOP}
+                                    onChange={(e) => setSelectedRepoOP(e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-3xl p-6 text-xl font-black text-center outline-none focus:ring-4 focus:ring-accent-purple/20 transition-all appearance-none cursor-pointer"
+                                >
+                                    <option value="" className="bg-black">-- Seleccione OP --</option>
+                                    {Array.from(new Set(allProcesos.map(p => p.ordenProduccion)))
+                                        .filter(op => op !== 'N/A')
+                                        .sort()
+                                        .map(op => (
+                                            <option key={op} value={op} className="bg-black">{op}</option>
+                                        ))
+                                    }
+                                </select>
+                            </div>
+
+                            <button
+                                onClick={generatePDF}
+                                disabled={!selectedRepoOP || isGenerating}
+                                className={cn(
+                                    "w-full bg-accent-purple text-white py-6 rounded-3xl font-black text-xl flex items-center justify-center gap-4 transition-all shadow-xl shadow-accent-purple/20 hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:grayscale",
+                                    isGenerating && "animate-pulse"
+                                )}
+                            >
+                                {isGenerating ? (
+                                    <>
+                                        <RefreshCw className="h-7 w-7 animate-spin" /> PROCESANDO...
+                                    </>
+                                ) : (
+                                    <>
+                                        <FileText className="h-7 w-7" /> DESCARGAR REPORTE PDF
+                                    </>
+                                )}
+                            </button>
+
+                            {!selectedRepoOP && (
+                                <p className="text-[10px] font-black uppercase text-gray-600 tracking-widest text-center">
+                                    EL REPORTE INCLUIRÁ TODOS LOS PROCESOS Y COLABORADORES ASOCIADOS A LA OP SELECCIONADA
+                                </p>
+                            )}
+                        </div>
+                    </>
+                )}
             </div>
             {/* MODAL DE EDICIÓN UNIVERSAL */}
             {editingItem && (
@@ -979,6 +1343,58 @@ export default function AdminPage() {
                                         </select>
                                     </div>
                                 </>
+                            )}
+
+                            {editingItem.type === 'orden' && (
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">OP</label>
+                                            <input
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:ring-2 focus:ring-primary-blue transition-all"
+                                                value={editValue.op}
+                                                onChange={(e) => setEditValue({ ...editValue, op: e.target.value.toUpperCase() })}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Lote</label>
+                                            <input
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:ring-2 focus:ring-primary-blue transition-all"
+                                                value={editValue.lote}
+                                                onChange={(e) => setEditValue({ ...editValue, lote: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Producto</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:ring-2 focus:ring-primary-blue transition-all"
+                                            value={editValue.producto}
+                                            onChange={(e) => setEditValue({ ...editValue, producto: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Cantidad</label>
+                                            <input
+                                                type="number"
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:ring-2 focus:ring-primary-blue transition-all"
+                                                value={editValue.cantidad}
+                                                onChange={(e) => setEditValue({ ...editValue, cantidad: Number(e.target.value) })}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Velocidad</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:ring-2 focus:ring-primary-blue transition-all"
+                                                value={editValue.velocidadTeorica}
+                                                onChange={(e) => setEditValue({ ...editValue, velocidadTeorica: Number(e.target.value) })}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
                             )}
 
                             <button

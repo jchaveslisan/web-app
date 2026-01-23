@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, ClipboardList, Package, Layers, Sparkles } from 'lucide-react';
-import { createProceso, addEventoLog, getMaestroColaboradores, getEtapas } from '@/lib/firebase-db';
+import { createProceso, addEventoLog, getMaestroColaboradores, getEtapas, getMaestroOrdenes } from '@/lib/firebase-db';
 import { useAuthStore } from '@/lib/auth-service';
-import { ColaboradorMaestro, Etapa } from '@/types';
+import { ColaboradorMaestro, Etapa, OrdenMaestra } from '@/types';
 
 export default function NuevoProcesoPage() {
     const router = useRouter();
@@ -15,6 +15,7 @@ export default function NuevoProcesoPage() {
     const [tipoProceso, setTipoProceso] = useState<'empaque' | 'otros' | 'anexos' | null>(null);
     const [etapas, setEtapas] = useState<Etapa[]>([]);
     const [colaboradores, setColaboradores] = useState<ColaboradorMaestro[]>([]);
+    const [ordenesMaestras, setOrdenesMaestras] = useState<OrdenMaestra[]>([]);
 
     // Protección de ruta (Solo usuarios autenticados)
     useEffect(() => {
@@ -37,6 +38,14 @@ export default function NuevoProcesoPage() {
             setEtapas(data);
         };
         fetchEtapas();
+    }, []);
+
+    useEffect(() => {
+        const fetchOrdenes = async () => {
+            const data = await getMaestroOrdenes();
+            setOrdenesMaestras(data);
+        };
+        fetchOrdenes();
     }, []);
 
     const onSubmit = async (data: any) => {
@@ -160,6 +169,33 @@ export default function NuevoProcesoPage() {
                                 Cambiar tipo
                             </button>
                         </div>
+
+                        {(tipoProceso === 'empaque' || tipoProceso === 'otros') && (
+                            <div className="bg-primary-blue/5 border border-primary-blue/20 rounded-2xl p-6 mb-4">
+                                <label className="block text-xs font-black uppercase tracking-widest text-primary-blue mb-4">Seleccionar de Ordenes Maestras (Opcional)</label>
+                                <select
+                                    onChange={(e) => {
+                                        const selected = ordenesMaestras.find(o => o.id === e.target.value);
+                                        if (selected) {
+                                            setValue('op', selected.op);
+                                            setValue('producto', selected.producto);
+                                            setValue('lote', selected.lote);
+                                            setValue('etapa', selected.etapa);
+                                            setValue('cantidad', selected.cantidad);
+                                            setValue('velocidad', selected.velocidadTeorica);
+                                        }
+                                    }}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary-blue/50 outline-none text-white font-bold"
+                                >
+                                    <option value="">-- Buscar en maestro de ordenes --</option>
+                                    {ordenesMaestras.map(o => (
+                                        <option key={o.id} value={o.id} className="bg-black text-white">
+                                            {o.op} - {o.producto}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
 
                         {tipoProceso === 'empaque' ? (
                             // Formulario completo para empaque

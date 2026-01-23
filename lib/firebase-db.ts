@@ -37,7 +37,7 @@ export {
 };
 import { db } from './firebase';
 export { db };
-import { Proceso, ColaboradorLog, EventoLog, User, ColaboradorMaestro, Justificacion, Etapa } from '@/types';
+import { Proceso, ColaboradorLog, EventoLog, User, ColaboradorMaestro, Justificacion, Etapa, OrdenMaestra } from '@/types';
 
 // --- USUARIOS ---
 export const getUsuario = async (uid: string): Promise<User | null> => {
@@ -414,5 +414,27 @@ export const executeBulkExit = async (
             message: `Error al procesar salida grupal: ${error instanceof Error ? error.message : 'Error desconocido'}`
         };
     }
+};
+
+// --- MAESTRO ORDENES ---
+export const getMaestroOrdenes = async (): Promise<OrdenMaestra[]> => {
+    const q = query(collection(db, 'maestro_ordenes'), where('activo', '==', true));
+    const snapshot = await getDocs(q);
+    return snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as OrdenMaestra))
+        .sort((a, b) => a.op.localeCompare(b.op));
+};
+
+export const createOrdenMaestra = async (orden: Omit<OrdenMaestra, 'id'>) => {
+    return await addDoc(collection(db, 'maestro_ordenes'), {
+        ...orden,
+        activo: true
+    });
+};
+
+export const deleteOrdenMaestra = async (id: string) => {
+    return await updateDoc(doc(db, 'maestro_ordenes', id), {
+        activo: false
+    });
 };
 

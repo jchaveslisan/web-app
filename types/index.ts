@@ -100,3 +100,13 @@ export interface Etapa {
     tiposProceso?: TipoProceso[];
 }
 
+export interface OrdenMaestra {
+    id: string;
+    op: string; // Orden de Producción
+    producto: string;
+    lote: string;
+    etapa: string;
+    cantidad: number;
+    velocidadTeorica: number;
+    activo: boolean;
+}
