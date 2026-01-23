@@ -127,9 +127,11 @@ export default function AdminPage() {
 
     // Cargar Ordenes Maestras
     useEffect(() => {
-        const q = query(collection(db, 'maestro_ordenes'), where('activo', '==', true), orderBy('op', 'asc'));
+        const q = query(collection(db, 'maestro_ordenes'), orderBy('op', 'asc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OrdenMaestra));
+            const data = snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() } as OrdenMaestra))
+                .filter(o => o.activo);
             setOrdenes(data);
         });
         return () => unsubscribe();

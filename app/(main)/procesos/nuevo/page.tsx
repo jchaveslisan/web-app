@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, ClipboardList, Package, Layers, Sparkles } from 'lucide-react';
-import { createProceso, addEventoLog, getMaestroColaboradores, getEtapas, getMaestroOrdenes } from '@/lib/firebase-db';
+import { createProceso, addEventoLog } from '@/lib/firebase-db';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { useAuthStore } from '@/lib/auth-service';
 import { ColaboradorMaestro, Etapa, OrdenMaestra } from '@/types';
 
@@ -25,27 +27,30 @@ export default function NuevoProcesoPage() {
     }, [user, router]);
 
     useEffect(() => {
-        const fetchColaboradores = async () => {
-            const data = await getMaestroColaboradores();
-            setColaboradores(data);
-        };
-        fetchColaboradores();
+        const q = query(collection(db, 'maestro_colaboradores'), where('activo', '==', true), orderBy('nombreCompleto', 'asc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setColaboradores(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ColaboradorMaestro)));
+        });
+        return () => unsubscribe();
     }, []);
 
     useEffect(() => {
-        const fetchEtapas = async () => {
-            const data = await getEtapas();
-            setEtapas(data);
-        };
-        fetchEtapas();
+        const q = query(collection(db, 'maestro_etapas'), where('activo', '==', true), orderBy('nombre', 'asc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setEtapas(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Etapa)));
+        });
+        return () => unsubscribe();
     }, []);
 
     useEffect(() => {
-        const fetchOrdenes = async () => {
-            const data = await getMaestroOrdenes();
+        const q = query(collection(db, 'maestro_ordenes'), orderBy('op', 'asc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() } as OrdenMaestra))
+                .filter(o => o.activo);
             setOrdenesMaestras(data);
-        };
-        fetchOrdenes();
+        });
+        return () => unsubscribe();
     }, []);
 
     const onSubmit = async (data: any) => {
