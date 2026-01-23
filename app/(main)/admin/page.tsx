@@ -180,74 +180,152 @@ export default function AdminPage() {
             }
 
             const doc = new jsPDF();
+            const formatDuration = (seconds: number) => {
+                const h = Math.floor(seconds / 3600);
+                const m = Math.floor((seconds % 3600) / 60);
+                const s = Math.floor(seconds % 60);
+                return `${h}h ${m}m ${s}s`;
+            };
 
-            // Header
-            doc.setFillColor(0, 102, 204);
-            doc.rect(0, 0, 210, 40, 'F');
-            doc.setTextColor(255, 255, 255);
-            doc.setFontSize(22);
-            doc.text('REPORTE DE PRODUCCIÓN', 105, 20, { align: 'center' });
-            doc.setFontSize(10);
-            doc.text(`Generado el: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 105, 30, { align: 'center' });
-
-            // OP Info
-            doc.setTextColor(0, 0, 0);
-            doc.setFontSize(14);
-            doc.text(`ORDEN DE PRODUCCIÓN: ${selectedRepoOP}`, 20, 55);
-            doc.setFontSize(11);
-            doc.text(`Producto: ${procesosOP[0].producto}`, 20, 65);
-            doc.text(`Lote: ${procesosOP[0].lote}`, 20, 72);
-
-            let yPos = 85;
+            // 1. RECOLECCIÓN DE DATOS COMPLETA
+            const allLogs: any[] = [];
+            const allEvents: any[] = [];
+            const collaboratorTime: Record<string, number> = {};
+            let totalPauseDuration = 0;
+            let startTimes: number[] = [];
+            let endTimes: number[] = [];
 
             for (const proceso of procesosOP) {
-                doc.setFontSize(12);
-                doc.setTextColor(0, 102, 204);
-                doc.text(`Etapa: ${proceso.etapa || 'N/A'}`, 20, yPos);
-                yPos += 7;
+                if (proceso.horaInicioReal) startTimes.push(proceso.horaInicioReal.toMillis());
+                if (proceso.horaFinReal) endTimes.push(proceso.horaFinReal.toMillis());
 
-                // Fetch logs for this process - Usando getDocs para asegurar datos al momento
                 const qLogs = query(collection(db, 'colaboradores_log'), where('procesoId', '==', proceso.id));
                 const snapLogs = await getDocs(qLogs);
-                const logs = snapLogs.docs.map(d => d.data());
+                const logs = snapLogs.docs.map(d => ({ ...d.data(), etapa: proceso.etapa }));
+                allLogs.push(...logs);
 
-                const tableData = logs.map((log: any) => {
-                    const ingreso = log.horaIngreso?.toDate();
-                    const salida = log.horaSalida?.toDate();
-                    let duracion = '-';
-                    if (ingreso && salida) {
-                        const diffSecs = Math.floor((salida.getTime() - ingreso.getTime()) / 1000);
-                        const h = Math.floor(diffSecs / 3600);
-                        const m = Math.floor((diffSecs % 3600) / 60);
-                        const s = diffSecs % 60;
-                        duracion = `${h}h ${m}m ${s}s`;
+                const qEvents = query(collection(db, 'eventos_log'), where('procesoId', '==', proceso.id));
+                const snapEvents = await getDocs(qEvents);
+                const events = snapEvents.docs.map(d => ({ ...d.data(), etapa: proceso.etapa }));
+                allEvents.push(...events);
+
+                // Calcular tiempo por colaborador en esta etapa
+                logs.forEach((log: any) => {
+                    const entry = log.horaIngreso?.toDate();
+                    const exit = log.horaSalida?.toDate();
+                    if (entry && exit) {
+                        const duration = Math.floor((exit.getTime() - entry.getTime()) / 1000);
+                        collaboratorTime[log.nombre || (log as any).nombreColaborador] = (collaboratorTime[log.nombre || (log as any).nombreColaborador] || 0) + duration;
                     }
-                    return [
-                        log.nombreColaborador || 'Desc.',
-                        log.tipo === 'colaborador' ? 'DIRECTO' : 'SOLO SETUP',
-                        ingreso ? format(ingreso, 'HH:mm:ss') : '-',
-                        salida ? format(salida, 'HH:mm:ss') : 'En curso',
-                        duracion
-                    ];
                 });
-
-                autoTable(doc, {
-                    startY: yPos,
-                    head: [['Colaborador', 'Tipo', 'Ingreso', 'Salida', 'Duración']],
-                    body: tableData,
-                    theme: 'grid',
-                    headStyles: { fillColor: [0, 102, 204] },
-                    margin: { left: 20, right: 20 }
-                });
-
-                yPos = (doc as any).lastAutoTable.finalY + 15;
-                if (yPos > 250) {
-                    doc.addPage();
-                    yPos = 20;
-                }
             }
 
-            doc.save(`Reporte_OP_${selectedRepoOP}.pdf`);
+            // Calcular pausas desde los eventos
+            const sortedEvents = allEvents.sort((a, b) => (a.horaEvento?.toMillis() || 0) - (b.horaEvento?.toMillis() || 0));
+            let pauseStart: number | null = null;
+            sortedEvents.forEach(evt => {
+                if (evt.evento.includes('PAUSA')) pauseStart = evt.horaEvento?.toMillis();
+                if (evt.evento.includes('REANUDACIÓN') && pauseStart) {
+                    totalPauseDuration += Math.floor((evt.horaEvento.toMillis() - pauseStart) / 1000);
+                    pauseStart = null;
+                }
+            });
+
+            const minStart = startTimes.length ? Math.min(...startTimes) : 0;
+            const maxEnd = endTimes.length ? Math.max(...endTimes) : Date.now();
+            const totalProcessDuration = minStart && maxEnd ? Math.floor((maxEnd - minStart) / 1000) : 0;
+
+            // --- RENDERIZADO PDF ---
+            // Header
+            doc.setFillColor(30, 41, 59);
+            doc.rect(0, 0, 210, 45, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(24);
+            doc.text('REPORTE INTEGRAL DE PRODUCCIÓN', 105, 22, { align: 'center' });
+            doc.setFontSize(10);
+            doc.text(`ORDEN DE PRODUCCIÓN: ${selectedRepoOP} | GENERADO: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 105, 34, { align: 'center' });
+
+            // 2. RESUMEN GENERAL
+            doc.setTextColor(0, 0, 0);
+            doc.setFontSize(14);
+            doc.text('RESUMEN GENERAL', 20, 60);
+            doc.line(20, 62, 190, 62);
+            autoTable(doc, {
+                startY: 65,
+                body: [
+                    ['PRODUCTO:', (procesosOP[0].producto || '').toUpperCase()],
+                    ['LOTE:', (procesosOP[0].lote || '').toUpperCase()],
+                    ['TIEMPO TOTAL DEL PROCESO:', formatDuration(totalProcessDuration)],
+                    ['TIEMPO TOTAL DE PAUSAS:', formatDuration(totalPauseDuration)],
+                    ['ETAPAS REGISTRADAS:', procesosOP.length.toString()],
+                    ['LÍDER DE CUMPLIMIENTO:', procesosOP[0].lider || 'N/A']
+                ],
+                theme: 'plain',
+                styles: { fontSize: 10 },
+                columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 } }
+            });
+
+            // 3. RESUMEN COLABORADORES
+            doc.setFontSize(14);
+            doc.text('TIEMPO TOTAL POR COLABORADOR', 20, (doc as any).lastAutoTable.finalY + 15);
+            autoTable(doc, {
+                startY: (doc as any).lastAutoTable.finalY + 20,
+                head: [['Colaborador', 'Tiempo Total Invertido']],
+                body: Object.entries(collaboratorTime).sort((a, b) => b[1] - a[1]).map(([n, t]) => [n, formatDuration(t)]),
+                theme: 'striped',
+                headStyles: { fillColor: [51, 65, 85] }
+            });
+
+            // 4. DETALLE ETAPAS
+            doc.addPage();
+            doc.setFontSize(16);
+            doc.text('DESGLOSE POR ETAPAS', 20, 20);
+            let currentY = 30;
+            for (const proceso of procesosOP) {
+                if (currentY > 240) { doc.addPage(); currentY = 20; }
+                const stageLogs = allLogs.filter(l => l.procesoId === proceso.id);
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'bold');
+                doc.text(`ETAPA: ${proceso.etapa || 'N/A'}`, 20, currentY);
+                currentY += 5;
+                autoTable(doc, {
+                    startY: currentY,
+                    head: [['Colaborador', 'Tipo', 'Ingreso', 'Salida', 'Duración']],
+                    body: stageLogs.map((log: any) => {
+                        const dur = log.horaIngreso && log.horaSalida ? Math.floor((log.horaSalida.toMillis() - log.horaIngreso.toMillis()) / 1000) : 0;
+                        return [
+                            log.nombre || (log as any).nombreColaborador,
+                            log.tipo === 'colaborador' ? 'DIRECTO' : 'SETUP',
+                            log.horaIngreso ? format(log.horaIngreso.toDate(), 'HH:mm:ss') : '-',
+                            log.horaSalida ? format(log.horaSalida.toDate(), 'HH:mm:ss') : '-',
+                            dur ? formatDuration(dur) : '-'
+                        ];
+                    }),
+                    styles: { fontSize: 8 },
+                    headStyles: { fillColor: [71, 85, 105] }
+                });
+                currentY = (doc as any).lastAutoTable.finalY + 15;
+            }
+
+            // 5. BITACORA
+            doc.addPage();
+            doc.setFontSize(16);
+            doc.text('BITÁCORA INTEGRAL DE EVENTOS', 20, 20);
+            autoTable(doc, {
+                startY: 30,
+                head: [['Hora', 'Etapa', 'Evento', 'Justificación', 'Usuario']],
+                body: sortedEvents.map(evt => [
+                    evt.horaEvento ? format(evt.horaEvento.toDate(), 'HH:mm:ss') : '-',
+                    evt.etapa || '-',
+                    evt.evento,
+                    evt.justificacion || '-',
+                    evt.registradoPorUsuario || '-'
+                ]),
+                styles: { fontSize: 8 },
+                headStyles: { fillColor: [15, 23, 42] }
+            });
+
+            doc.save(`Reporte_Integral_OP_${selectedRepoOP}.pdf`);
 
         } catch (error) {
             console.error(error);

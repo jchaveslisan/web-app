@@ -53,10 +53,10 @@ export default function ModalJustificacion({ tipo, onConfirm, onCancel }: Props)
                                         key={opcion}
                                         onClick={() => { setSeleccionada(opcion); setOtra(''); }}
                                         className={cn(
-                                            "w-full p-6 rounded-3xl text-left font-black text-xl transition-all border flex items-center justify-between group",
+                                            "w-full p-6 rounded-3xl text-left font-bold text-3xl transition-all border flex items-center justify-between group",
                                             seleccionada === opcion
                                                 ? "bg-warning-yellow border-warning-yellow text-black"
-                                                : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:border-white/20"
+                                                : "bg-white/10 border-white/20 text-white hover:bg-white/20 hover:border-white/40"
                                         )}
                                     >
                                         {opcion}
@@ -66,10 +66,10 @@ export default function ModalJustificacion({ tipo, onConfirm, onCancel }: Props)
                                 <button
                                     onClick={() => setSeleccionada('OTRA')}
                                     className={cn(
-                                        "w-full p-6 rounded-3xl text-left font-black text-xl transition-all border flex items-center justify-between",
+                                        "w-full p-6 rounded-3xl text-left font-bold text-3xl transition-all border flex items-center justify-between",
                                         seleccionada === 'OTRA'
                                             ? "bg-warning-yellow border-warning-yellow text-black"
-                                            : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
+                                            : "bg-white/10 border-white/20 text-white hover:bg-white/20"
                                     )}
                                 >
                                     OTRA (ESPECIFICAR)
@@ -81,7 +81,7 @@ export default function ModalJustificacion({ tipo, onConfirm, onCancel }: Props)
                                 <div className="mt-6 animate-in slide-in-from-top-2">
                                     <textarea
                                         placeholder="Describa el motivo..."
-                                        className="w-full bg-black/50 border-2 border-warning-yellow/50 rounded-[2rem] p-6 text-white text-xl focus:outline-none focus:ring-4 focus:ring-warning-yellow/20 transition-all font-black"
+                                        className="w-full bg-black/50 border-2 border-warning-yellow/50 rounded-[2rem] p-6 text-white text-2xl focus:outline-none focus:ring-4 focus:ring-warning-yellow/20 transition-all font-bold"
                                         rows={3}
                                         value={otra}
                                         onChange={(e) => setOtra(e.target.value)}
