@@ -466,7 +466,7 @@ export default function MonitoreoPage() {
     );
 
     const handleStaffAction = async () => {
-        if (!staffCode.trim()) return;
+        if (!staffCode.trim() || staffActionLoading) return;
         setStaffActionLoading(true);
         setStaffMessage(null);
 
@@ -519,7 +519,17 @@ export default function MonitoreoPage() {
 
     const handleConfirmStaffEntry = async (tipo: 'colaborador' | 'apoyo', maestroToAdd?: ColaboradorMaestro) => {
         const maestroActual = maestroToAdd || pendingStaffMaestro;
-        if (!maestroActual || !proceso) return;
+        if (!maestroActual || !proceso || staffActionLoading) return;
+
+        // Verificación de seguridad: ¿Ya está activo? (Evita duplicados por doble click)
+        const yaEstaActivo = colaboradores.some(c => c.colaboradorId === maestroActual.id && !c.horaSalida);
+        if (yaEstaActivo) {
+            setShowStaffTypeModal(false);
+            setPendingStaffMaestro(null);
+            return;
+        }
+
+        setStaffActionLoading(true);
         try {
             await addColaboradorToLog({
                 procesoId: id,
@@ -1088,7 +1098,8 @@ export default function MonitoreoPage() {
                             <div className="grid grid-cols-1 w-full gap-4">
                                 <button
                                     onClick={() => handleConfirmStaffEntry('colaborador')}
-                                    className="group relative flex items-center justify-between p-6 bg-white/5 hover:bg-success-green hover:text-black rounded-3xl border border-white/10 transition-all text-left"
+                                    disabled={staffActionLoading}
+                                    className="group relative flex items-center justify-between p-6 bg-white/5 hover:bg-success-green hover:text-black rounded-3xl border border-white/10 transition-all text-left disabled:opacity-50"
                                 >
                                     <div>
                                         <p className="text-xl font-black uppercase">Colaborador</p>
@@ -1099,7 +1110,8 @@ export default function MonitoreoPage() {
 
                                 <button
                                     onClick={() => handleConfirmStaffEntry('apoyo')}
-                                    className="group relative flex items-center justify-between p-6 bg-white/5 hover:bg-primary-blue hover:text-white rounded-3xl border border-white/10 transition-all text-left"
+                                    disabled={staffActionLoading}
+                                    className="group relative flex items-center justify-between p-6 bg-white/5 hover:bg-primary-blue hover:text-white rounded-3xl border border-white/10 transition-all text-left disabled:opacity-50"
                                 >
                                     <div>
                                         <p className="text-xl font-black uppercase">Apoyo</p>
@@ -1114,6 +1126,7 @@ export default function MonitoreoPage() {
                                     setShowStaffTypeModal(false);
                                     setPendingStaffMaestro(null);
                                 }}
+                                disabled={staffActionLoading}
                                 className="text-gray-500 font-black text-[10px] uppercase tracking-[0.3em] hover:text-white transition-colors"
                             >
                                 Cancelar registro
