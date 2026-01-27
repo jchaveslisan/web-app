@@ -56,7 +56,19 @@ export default function ProcesosPage() {
     const user = useAuthStore(state => state.user);
     const router = useRouter();
 
-    const [activeTab, setActiveTab] = useState<TipoProceso | 'personal'>('empaque');
+    const [activeTab, setActiveTab] = useState<TipoProceso | 'personal'>(() => {
+        if (typeof window !== 'undefined') {
+            return (localStorage.getItem('activeProcesosTab') as any) || 'empaque';
+        }
+        return 'empaque';
+    });
+
+    // Guardar la pestaña cuando cambia
+    useEffect(() => {
+        localStorage.setItem('activeProcesosTab', activeTab);
+    }, [activeTab]);
+
+
 
     // Sharing state
     const [sharingProceso, setSharingProceso] = useState<Proceso | null>(null);

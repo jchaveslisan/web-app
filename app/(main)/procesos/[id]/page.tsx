@@ -59,15 +59,30 @@ export default function MonitoreoPage() {
     const router = useRouter();
     const { proceso, colaboradores, eventos, loading } = useProcesoRealtime(id);
     const user = useAuthStore(state => state.user);
+    const handleBack = () => {
+        if (proceso) {
+            localStorage.setItem('activeProcesosTab', getTipoProcesoReal(proceso));
+        }
+        router.push('/procesos');
+    };
+
+
+    // Actualizar la "memoria" de la pestaña para que al volver se mantenga en esta categoría
+    useEffect(() => {
+        if (proceso) {
+            localStorage.setItem('activeProcesosTab', getTipoProcesoReal(proceso));
+        }
+    }, [proceso]);
 
     // Validación de acceso por Rol (Usuario solo ve los suyos + compartidos)
+
     useEffect(() => {
         if (!loading && proceso && user?.rol === 'usuario') {
             const esMio = proceso.registradoPorUsuario === user.username;
             const compartidoConmigo = (proceso as any).visiblePara?.includes(user.username);
 
             if (!esMio && !compartidoConmigo) {
-                router.push('/procesos');
+                handleBack();
             }
         }
     }, [proceso, user, loading, router]);
@@ -454,7 +469,7 @@ export default function MonitoreoPage() {
             }
 
             await addEventoLog(id, "Proceso Finalizado", `El proceso ha sido marcado como COMPLETADO. Salida automática de ${activos.length} colaboradores.`, "ESTADO", user?.username || 'sistema');
-            router.push('/procesos');
+            handleBack();
         } catch (error) {
             console.error(error);
         }
@@ -471,7 +486,7 @@ export default function MonitoreoPage() {
         <div className="min-h-screen bg-background flex flex-col items-center justify-center text-white gap-4">
             <AlertTriangle className="h-16 w-16 text-danger-red" />
             <p className="font-black tracking-widest uppercase text-2xl">Proceso no encontrado</p>
-            <button onClick={() => router.push('/procesos')} className="bg-white/10 px-6 py-3 rounded-xl font-bold">Volver al inicio</button>
+            <button onClick={handleBack} className="bg-white/10 px-6 py-3 rounded-xl font-bold">Volver al inicio</button>
         </div>
     );
 
@@ -620,7 +635,7 @@ export default function MonitoreoPage() {
             <header className="border-b border-white/10 bg-black/50 backdrop-blur-md p-4 flex items-center justify-between sticky top-0 z-50">
                 <div className="flex flex-wrap items-center gap-4">
                     <button
-                        onClick={() => router.push('/procesos')}
+                        onClick={handleBack}
                         className="p-2 hover:bg-white/10 rounded-lg transition-colors border border-white/5 bg-white/5"
                     >
                         <ArrowLeft className="h-6 w-6" />
