@@ -1438,6 +1438,39 @@ export default function AdminPage() {
                                             onChange={(e) => setEditValue({ ...editValue, nombre: e.target.value })}
                                         />
                                     </div>
+                                    <div className="mt-4">
+                                        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Visible en procesos de tipo:</label>
+                                        <div className="flex flex-wrap gap-4">
+                                            {[
+                                                { id: 'empaque', label: 'Empaque' },
+                                                { id: 'otros', label: 'Otros' },
+                                                { id: 'anexos', label: 'Anexos' }
+                                            ].map(tipo => (
+                                                <label key={tipo.id} className="flex items-center gap-2 cursor-pointer group">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={(editValue.tiposProceso || []).includes(tipo.id)}
+                                                        onChange={(e) => {
+                                                            const current = editValue.tiposProceso || [];
+                                                            if (e.target.checked) {
+                                                                setEditValue({ ...editValue, tiposProceso: [...current, tipo.id] });
+                                                            } else {
+                                                                setEditValue({ ...editValue, tiposProceso: current.filter((t: string) => t !== tipo.id) });
+                                                            }
+                                                        }}
+                                                        className="hidden"
+                                                    />
+                                                    <div className={cn(
+                                                        "w-5 h-5 rounded border-2 flex items-center justify-center transition-all",
+                                                        (editValue.tiposProceso || []).includes(tipo.id) ? "bg-accent-purple border-accent-purple" : "border-white/20 group-hover:border-white/40"
+                                                    )}>
+                                                        {(editValue.tiposProceso || []).includes(tipo.id) && <Check className="h-3 w-3 text-white" />}
+                                                    </div>
+                                                    <span className="text-sm font-bold">{tipo.label}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </>
                             )}
 
