@@ -18,6 +18,8 @@ export default function NuevoProcesoPage() {
     const [etapas, setEtapas] = useState<Etapa[]>([]);
     const [colaboradores, setColaboradores] = useState<ColaboradorMaestro[]>([]);
     const [ordenesMaestras, setOrdenesMaestras] = useState<OrdenMaestra[]>([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
     // Protección de ruta (Solo usuarios autenticados)
     useEffect(() => {
@@ -177,28 +179,68 @@ export default function NuevoProcesoPage() {
 
                         {(tipoProceso === 'empaque' || tipoProceso === 'otros') && (
                             <div className="bg-primary-blue/5 border border-primary-blue/20 rounded-2xl p-6 mb-4">
-                                <label className="block text-xs font-black uppercase tracking-widest text-primary-blue mb-4">Seleccionar de Ordenes Maestras (Opcional)</label>
-                                <select
-                                    onChange={(e) => {
-                                        const selected = ordenesMaestras.find(o => o.id === e.target.value);
-                                        if (selected) {
-                                            setValue('op', selected.op);
-                                            setValue('producto', selected.producto);
-                                            setValue('lote', selected.lote);
-                                            setValue('etapa', selected.etapa);
-                                            setValue('cantidad', selected.cantidad);
-                                            setValue('velocidad', selected.velocidadTeorica);
-                                        }
-                                    }}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary-blue/50 outline-none text-white font-bold"
-                                >
-                                    <option value="">-- Buscar en maestro de ordenes --</option>
-                                    {ordenesMaestras.map(o => (
-                                        <option key={o.id} value={o.id} className="bg-black text-white">
-                                            {o.op} - {o.producto}
-                                        </option>
-                                    ))}
-                                </select>
+                                <div className="relative">
+                                    <div className="flex flex-col gap-2">
+                                        <div className="relative">
+                                            <input
+                                                type="text"
+                                                placeholder="🔍 Escribe para buscar por OP o Producto..."
+                                                value={searchTerm}
+                                                onChange={(e) => {
+                                                    setSearchTerm(e.target.value);
+                                                    setIsDropdownOpen(true);
+                                                }}
+                                                onFocus={() => setIsDropdownOpen(true)}
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary-blue/50 outline-none text-white font-bold placeholder:text-gray-600"
+                                            />
+                                        </div>
+
+                                        {isDropdownOpen && (
+                                            <div className="absolute z-50 top-full left-0 right-0 mt-2 max-h-60 overflow-y-auto bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl backdrop-blur-xl">
+                                                {ordenesMaestras
+                                                    .filter(o =>
+                                                        o.op.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                                        o.producto.toLowerCase().includes(searchTerm.toLowerCase())
+                                                    )
+                                                    .map(o => (
+                                                        <div
+                                                            key={o.id}
+                                                            onClick={() => {
+                                                                setValue('op', o.op);
+                                                                setValue('producto', o.producto);
+                                                                setValue('lote', o.lote);
+                                                                setValue('etapa', o.etapa);
+                                                                setValue('cantidad', o.cantidad);
+                                                                setValue('velocidad', o.velocidadTeorica);
+                                                                setSearchTerm(`${o.op} - ${o.producto}`);
+                                                                setIsDropdownOpen(false);
+                                                            }}
+                                                            className="p-4 hover:bg-primary-blue hover:text-white cursor-pointer transition-colors border-b border-white/5 last:border-0"
+                                                        >
+                                                            <div className="font-black text-sm uppercase tracking-tight">{o.op}</div>
+                                                            <div className="text-xs opacity-60 font-medium truncate">{o.producto}</div>
+                                                            {o.lote && <div className="text-[10px] opacity-40 uppercase">Lote: {o.lote}</div>}
+                                                        </div>
+                                                    ))
+                                                }
+                                                {ordenesMaestras.filter(o =>
+                                                    o.op.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                                    o.producto.toLowerCase().includes(searchTerm.toLowerCase())
+                                                ).length === 0 && (
+                                                        <div className="p-4 text-center text-gray-500 text-sm font-bold">
+                                                            No se encontraron órdenes
+                                                        </div>
+                                                    )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {isDropdownOpen && (
+                                        <div
+                                            className="fixed inset-0 z-40"
+                                            onClick={() => setIsDropdownOpen(false)}
+                                        />
+                                    )}
+                                </div>
                             </div>
                         )}
 
