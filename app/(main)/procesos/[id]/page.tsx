@@ -1055,7 +1055,7 @@ export default function MonitoreoPage() {
                                         </div>
                                         <div>
                                             <p className="text-[clamp(0.5rem,0.8vw,0.65rem)] font-black text-gray-400 uppercase tracking-widest mb-1">Velocidad Equipo</p>
-                                            <h3 className="text-[clamp(1.5rem,2.5vw,2rem)] font-black tracking-tight">{stats.velocidadActual} <span className="text-xs text-gray-500">est/min</span></h3>
+                                            <h3 className="text-[clamp(1.5rem,2.5vw,2rem)] font-black tracking-tight">{stats.velocidadActual.toFixed(2)} <span className="text-xs text-gray-500">est/min</span></h3>
                                         </div>
                                     </div>
 
