@@ -56,10 +56,12 @@ export async function POST() {
             const op = String(row['ORDEN PRODUCCION'] || '').trim();
             if (!op) return; // Ignorar filas sin OP
 
-            const anio = Number(row['AÑO']) || 0;
+            // Limpiar el valor del año por si viene con comas, espacios o formato de texto
+            const anioRaw = String(row['AÑO'] || '0').replace(/[^0-9]/g, '');
+            const anio = parseInt(anioRaw, 10);
 
-            // Filtro de año
-            if (anio <= 2026) {
+            // Filtro de año: Omitir solo si es estrictamente menor a 2026
+            if (anio < 2026) {
                 oldYearCount++;
                 return;
             }

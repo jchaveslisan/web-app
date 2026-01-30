@@ -173,7 +173,7 @@ export default function AdminPage() {
                 alert(`Sincronización completada:\n` +
                     `- ${result.imported} nuevas órdenes importadas.\n` +
                     `- ${result.alreadyExists} ya existían en la plataforma.\n` +
-                    `- ${result.oldYears} omitidas por ser años anteriores (<=2026).\n\n` +
+                    `- ${result.oldYears} omitidas por ser años anteriores (<2026).\n\n` +
                     `Total de filas analizadas en AppSheet: ${result.totalFound}`);
             } else {
                 alert(`Error: ${result.error || 'No se pudo sincronizar'}`);
