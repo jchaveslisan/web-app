@@ -53,9 +53,10 @@ export async function POST() {
         // 2. Mapear y preparar batch
         appSheetData.forEach((row: any) => {
             const op = String(row['ORDEN PRODUCCION'] || '').trim();
+            const anio = Number(row['AÑO']) || 0;
 
-            // Solo importamos si tiene OP y no existe ya
-            if (op && !existingOPs.has(op)) {
+            // Solo importamos si tiene OP, el AÑO es > 2026 y no existe ya
+            if (op && anio > 2026 && !existingOPs.has(op)) {
                 const newOrderRef = doc(collection(db, 'maestro_ordenes'));
                 batch.set(newOrderRef, {
                     op: op,
