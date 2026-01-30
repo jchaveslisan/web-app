@@ -48,32 +48,43 @@ export async function POST() {
 
         const batch = writeBatch(db);
         let importedCount = 0;
-        let skippedCount = 0;
+        let alreadyExistsCount = 0;
+        let oldYearCount = 0;
 
         // 2. Mapear y preparar batch
         appSheetData.forEach((row: any) => {
             const op = String(row['ORDEN PRODUCCION'] || '').trim();
+            if (!op) return; // Ignorar filas sin OP
+
             const anio = Number(row['AÑO']) || 0;
 
-            // Solo importamos si tiene OP, el AÑO es > 2026 y no existe ya
-            if (op && anio > 2026 && !existingOPs.has(op)) {
-                const newOrderRef = doc(collection(db, 'maestro_ordenes'));
-                batch.set(newOrderRef, {
-                    op: op,
-                    producto: String(row['DESCRIPCION'] || '').toUpperCase(),
-                    lote: String(row['LOTE'] || '').toUpperCase(),
-                    etapa: '', // Queda abierto según solicitud
-                    cantidad: Number(row['CANT TEORICA']) || 0,
-                    velocidadTeorica: 0, // Queda abierto según solicitud
-                    activo: true,
-                    importadoDeAppSheet: true,
-                    fechaSincro: new Date().toISOString()
-                });
-                importedCount++;
-                existingOPs.add(op); // Evitar duplicados dentro del mismo set de AppSheet
-            } else if (op) {
-                skippedCount++;
+            // Filtro de año
+            if (anio <= 2026) {
+                oldYearCount++;
+                return;
             }
+
+            // Filtro de duplicados
+            if (existingOPs.has(op)) {
+                alreadyExistsCount++;
+                return;
+            }
+
+            // Importación de nueva orden
+            const newOrderRef = doc(collection(db, 'maestro_ordenes'));
+            batch.set(newOrderRef, {
+                op: op,
+                producto: String(row['DESCRIPCION'] || '').toUpperCase(),
+                lote: String(row['LOTE'] || '').toUpperCase(),
+                etapa: '',
+                cantidad: Number(row['CANT TEORICA']) || 0,
+                velocidadTeorica: 0,
+                activo: true,
+                importadoDeAppSheet: true,
+                fechaSincro: new Date().toISOString()
+            });
+            importedCount++;
+            existingOPs.add(op);
         });
 
         if (importedCount > 0) {
@@ -84,7 +95,8 @@ export async function POST() {
             success: true,
             totalFound: appSheetData.length,
             imported: importedCount,
-            skipped: skippedCount
+            alreadyExists: alreadyExistsCount,
+            oldYears: oldYearCount
         });
 
     } catch (error: any) {

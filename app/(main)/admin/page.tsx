@@ -170,7 +170,11 @@ export default function AdminPage() {
             const result = await response.json();
 
             if (result.success) {
-                alert(`Sincronización completada:\n- ${result.imported} nuevas órdenes importadas.\n- ${result.skipped} órdenes omitidas (ya existen).\n\nTotal procesado: ${result.totalFound}`);
+                alert(`Sincronización completada:\n` +
+                    `- ${result.imported} nuevas órdenes importadas.\n` +
+                    `- ${result.alreadyExists} ya existían en la plataforma.\n` +
+                    `- ${result.oldYears} omitidas por ser años anteriores (<=2026).\n\n` +
+                    `Total de filas analizadas en AppSheet: ${result.totalFound}`);
             } else {
                 alert(`Error: ${result.error || 'No se pudo sincronizar'}`);
             }
