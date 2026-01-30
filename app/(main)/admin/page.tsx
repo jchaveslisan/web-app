@@ -64,6 +64,7 @@ export default function AdminPage() {
     const [newOrderEtapa, setNewOrderEtapa] = useState('');
     const [newOrderCantidad, setNewOrderCantidad] = useState(0);
     const [newOrderVelocidad, setNewOrderVelocidad] = useState(0);
+    const [isSyncing, setIsSyncing] = useState(false);
 
     // For editing
     const [editValue, setEditValue] = useState<any>({});
@@ -159,6 +160,25 @@ export default function AdminPage() {
             setShowForm(false);
         } catch (error) {
             console.error(error);
+        }
+    };
+
+    const handleSyncAppSheet = async () => {
+        setIsSyncing(true);
+        try {
+            const response = await fetch('/api/appsheet/sync', { method: 'POST' });
+            const result = await response.json();
+
+            if (result.success) {
+                alert(`Sincronización completada:\n- ${result.imported} nuevas órdenes importadas.\n- ${result.skipped} órdenes omitidas (ya existen).\n\nTotal procesado: ${result.totalFound}`);
+            } else {
+                alert(`Error: ${result.error || 'No se pudo sincronizar'}`);
+            }
+        } catch (error) {
+            console.error('Sync error:', error);
+            alert('Error de conexión con el servidor');
+        } finally {
+            setIsSyncing(false);
         }
     };
 
@@ -1170,13 +1190,23 @@ export default function AdminPage() {
                     <>
                         <div className="flex items-center justify-between mb-8">
                             <h2 className="text-xl font-black uppercase tracking-widest text-primary-blue">Ordenes de Producción Maestras</h2>
-                            <button
-                                onClick={() => setShowForm(!showForm)}
-                                className="flex items-center gap-2 bg-primary-blue hover:bg-blue-600 px-6 py-3 rounded-xl font-bold transition-all text-white shadow-lg shadow-blue-500/20"
-                            >
-                                {showForm ? <X className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
-                                {showForm ? "CANCELAR" : "CARGAR ORDEN"}
-                            </button>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={handleSyncAppSheet}
+                                    disabled={isSyncing}
+                                    className="flex items-center gap-2 bg-accent-purple hover:bg-purple-600 px-6 py-3 rounded-xl font-bold transition-all text-white shadow-lg shadow-purple-500/20 disabled:opacity-50"
+                                >
+                                    <RefreshCw className={cn("h-5 w-5", isSyncing && "animate-spin")} />
+                                    {isSyncing ? "SINCRONIZANDO..." : "SINCRO APPSHEET"}
+                                </button>
+                                <button
+                                    onClick={() => setShowForm(!showForm)}
+                                    className="flex items-center gap-2 bg-primary-blue hover:bg-blue-600 px-6 py-3 rounded-xl font-bold transition-all text-white shadow-lg shadow-blue-500/20"
+                                >
+                                    {showForm ? <X className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+                                    {showForm ? "CANCELAR" : "CARGAR ORDEN"}
+                                </button>
+                            </div>
                         </div>
 
                         {showForm && (
