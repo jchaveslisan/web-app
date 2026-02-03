@@ -122,16 +122,30 @@ export const addColaboradorToLog = async (log: Omit<ColaboradorLog, 'id' | 'hora
     });
 };
 
-export const getColaboradoresActivos = async (): Promise<ColaboradorLog[]> => {
-    // Para ser robustos con datos viejos o missing fields, traemos logs recientes
+export const getColaboradoresActivos = async (): Promise<(ColaboradorLog & { procesoEstado?: string })[]> => {
+    // 1. Traer todos los logs donde horaSalida sea estrictamente null
     const q = query(
         collection(db, 'colaboradores_log'),
-        limit(100) // Ajustar según volumen, pero suficiente para activos actuales
+        where('horaSalida', '==', null)
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as ColaboradorLog))
-        .filter(log => !log.horaSalida); // Filtra tanto null como undefined
+    const logsOpen = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ColaboradorLog));
+
+    // 2. Para cada log abierto, necesitamos verificar si su proceso sigue activo
+    const results = [];
+    for (const log of logsOpen) {
+        // Obtenemos el proceso de este log
+        const procDoc = await getDoc(doc(db, 'procesos', log.procesoId));
+        if (procDoc.exists()) {
+            const procData = procDoc.data();
+            // Solo lo consideramos "Activo Global" si el proceso NO está finalizado
+            if (procData.estado !== 'Finalizado') {
+                results.push({ ...log, procesoEstado: procData.estado });
+            }
+        }
+    }
+
+    return results;
 };
 
 // --- EVENTOS ---

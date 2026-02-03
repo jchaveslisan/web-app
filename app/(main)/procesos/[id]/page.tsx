@@ -514,7 +514,7 @@ export default function MonitoreoPage() {
                 // NO ESTÁ -> ES UN INGRESO
                 // Pero primero verificar si está en OTRA línea
                 const activosGlobales = await getColaboradoresActivos();
-                const yaActivoGlobal = activosGlobales.find(c => (c.colaboradorId === maestro.id || c.id === maestro.id) && c.procesoId !== id && !c.horaSalida);
+                const yaActivoGlobal = activosGlobales.find(c => c.colaboradorId === maestro.id && c.procesoId !== id);
 
                 if (yaActivoGlobal) {
                     setStaffMessage({ text: `${maestro.nombreCompleto} ESTÁ EN OTRA LÍNEA`, type: 'error' });

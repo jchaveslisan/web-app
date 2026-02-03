@@ -27,6 +27,7 @@ export default function ModalAddColaborador({ procesoId, onClose, currentUser }:
                     getColaboradoresActivos()
                 ]);
                 setMaestro(maestroData);
+                // Usar ID del documento del maestro para mayor consistencia
                 setActivosTotal(activosData.map((a: any) => a.colaboradorId));
             } catch (error) {
                 console.error("Error loading personnel data:", error);
@@ -38,7 +39,7 @@ export default function ModalAddColaborador({ procesoId, onClose, currentUser }:
     }, []);
 
     const handleSelect = async (colab: ColaboradorMaestro) => {
-        if (activosTotal.includes(colab.claveRegistro)) {
+        if (activosTotal.includes(colab.id)) {
             alert(`El colaborador ${colab.nombreCompleto} ya se encuentra activo en un proceso.`);
             return;
         }
@@ -119,7 +120,7 @@ export default function ModalAddColaborador({ procesoId, onClose, currentUser }:
                         <div className="text-center py-10 text-gray-500 font-bold animate-pulse uppercase tracking-widest text-xs">Cargando maestro...</div>
                     ) : (
                         filtered.map((colab) => {
-                            const estaActivo = activosTotal.includes(colab.claveRegistro);
+                            const estaActivo = activosTotal.includes(colab.id);
                             return (
                                 <button
                                     key={colab.id}

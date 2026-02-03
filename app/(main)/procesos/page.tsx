@@ -458,14 +458,21 @@ export default function ProcesosPage() {
                                             {allColaboradores
                                                 .filter(c => c.nombreCompleto.toLowerCase().includes(searchTerm.toLowerCase()) || c.claveRegistro.includes(searchTerm))
                                                 .sort((a, b) => {
-                                                    const activeA = activeLogs.some(l => l.colaboradorId === a.id) ? 1 : 0;
-                                                    const activeB = activeLogs.some(l => l.colaboradorId === b.id) ? 1 : 0;
+                                                    const logA = activeLogs.find(l => l.colaboradorId === a.id);
+                                                    const procA = logA ? procesos.find(p => p.id === logA.procesoId) : null;
+                                                    const activeA = (logA && procA && procA.estado !== 'Finalizado') ? 1 : 0;
+
+                                                    const logB = activeLogs.find(l => l.colaboradorId === b.id);
+                                                    const procB = logB ? procesos.find(p => p.id === logB.procesoId) : null;
+                                                    const activeB = (logB && procB && procB.estado !== 'Finalizado') ? 1 : 0;
+
                                                     if (activeA !== activeB) return activeB - activeA; // Activos primero
                                                     return a.nombreCompleto.localeCompare(b.nombreCompleto); // Luego alfabético
                                                 })
                                                 .map(colab => {
                                                     const activeLog = activeLogs.find(l => l.colaboradorId === colab.id);
                                                     const activeProceso = activeLog ? procesos.find(p => p.id === activeLog.procesoId) : null;
+                                                    const isTrulyInLine = !!(activeProceso && activeProceso.estado !== 'Finalizado');
 
                                                     return (
                                                         <tr key={colab.id} className="hover:bg-white/[0.02] transition-colors group">
@@ -473,7 +480,7 @@ export default function ProcesosPage() {
                                                                 <div className="flex items-center gap-3">
                                                                     <div className={cn(
                                                                         "h-2 w-2 rounded-full",
-                                                                        activeProceso ? "bg-success-green animate-pulse" : "bg-gray-600"
+                                                                        isTrulyInLine ? "bg-success-green animate-pulse" : "bg-gray-600"
                                                                     )} />
                                                                     <span className="font-bold text-white uppercase text-sm tracking-tight">{colab.nombreCompleto}</span>
                                                                 </div>
@@ -482,7 +489,7 @@ export default function ProcesosPage() {
                                                                 <span className="text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase">{colab.claveRegistro}</span>
                                                             </td>
                                                             <td className="p-5">
-                                                                {activeProceso ? (
+                                                                {isTrulyInLine ? (
                                                                     <div className="flex flex-col gap-1">
                                                                         <div className="flex items-center gap-2">
                                                                             <span className="text-[9px] font-black bg-success-green/20 text-success-green px-2 py-0.5 rounded-full uppercase tracking-widest border border-success-green/20">EN LÍNEA</span>
@@ -495,7 +502,7 @@ export default function ProcesosPage() {
                                                                 )}
                                                             </td>
                                                             <td className="p-5 text-right">
-                                                                {activeProceso && (
+                                                                {isTrulyInLine && (
                                                                     <button
                                                                         onClick={() => router.push(`/procesos/${activeProceso.id}`)}
                                                                         className="opacity-0 group-hover:opacity-100 bg-primary-blue hover:bg-blue-600 text-white px-4 py-2 rounded-xl text-[10px] font-black transition-all uppercase tracking-widest shadow-lg shadow-blue-500/10"
