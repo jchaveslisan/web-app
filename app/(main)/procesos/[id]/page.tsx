@@ -1122,368 +1122,387 @@ export default function MonitoreoPage() {
                         </div>
                     </div>
                 )}
-                <div className="glass w-full max-w-lg rounded-[3rem] overflow-hidden border-white/10 shadow-2xl flex flex-col items-center p-12 gap-8 text-center animate-in zoom-in duration-300">
-                    <div className="p-6 bg-primary-blue/20 rounded-full">
-                        <UserPlus className="h-12 w-12 text-primary-blue" />
-                    </div>
-                    <div>
-                        <h3 className="text-3xl font-black mb-2 uppercase tracking-tight">{pendingStaffMaestro.nombreCompleto}</h3>
-                        <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Seleccione el tipo de ingreso para este proceso</p>
-                    </div>
+            </main>
 
-                    <div className="grid grid-cols-1 w-full gap-4">
+            {/* MODALS & OVERLAYS */}
+            {modalJustificacion.show && (
+                <ModalJustificacion
+                    tipo={modalJustificacion.tipo}
+                    onConfirm={handleConfirmJustificacion}
+                    onCancel={() => {
+                        setModalJustificacion({ ...modalJustificacion, show: false });
+                        setPendingExitLog(null);
+                    }}
+                />
+            )}
+
+            {showModalBulkExit && (
+                <ModalBulkExit
+                    procesoId={id}
+                    userId={(user as any)?.uid}
+                    onClose={() => setShowModalBulkExit(false)}
+                    onSuccess={(exitCount) => {
+                        setStaffMessage({
+                            text: `✅ ${exitCount} salida(s) registrada(s)`,
+                            type: 'success'
+                        });
+                        setTimeout(() => setStaffMessage(null), 4000);
+                    }}
+                />
+            )}
+
+            {/* MODAL TIPO DE PERSONAL (INGRESO) */}
+            {showStaffTypeModal && pendingStaffMaestro && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
+                    <div className="glass w-full max-w-lg rounded-[3rem] overflow-hidden border-white/10 shadow-2xl flex flex-col items-center p-12 gap-8 text-center animate-in zoom-in duration-300">
+                        <div className="p-6 bg-primary-blue/20 rounded-full">
+                            <UserPlus className="h-12 w-12 text-primary-blue" />
+                        </div>
+                        <div>
+                            <h3 className="text-3xl font-black mb-2 uppercase tracking-tight">{pendingStaffMaestro.nombreCompleto}</h3>
+                            <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Seleccione el tipo de ingreso para este proceso</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 w-full gap-4">
+                            <button
+                                onClick={() => handleConfirmStaffEntry('colaborador')}
+                                disabled={staffActionLoading}
+                                className="group relative flex items-center justify-between p-6 bg-white/5 hover:bg-success-green hover:text-black rounded-3xl border border-white/10 transition-all text-left disabled:opacity-50"
+                            >
+                                <div>
+                                    <p className="text-xl font-black uppercase">Colaborador</p>
+                                    <p className="text-[10px] opacity-60 font-bold uppercase tracking-widest mt-1">Personal base de la línea</p>
+                                </div>
+                                <Activity className="h-6 w-6 opacity-40 group-hover:opacity-100" />
+                            </button>
+
+                            <button
+                                onClick={() => handleConfirmStaffEntry('apoyo')}
+                                disabled={staffActionLoading}
+                                className="group relative flex items-center justify-between p-6 bg-white/5 hover:bg-primary-blue hover:text-white rounded-3xl border border-white/10 transition-all text-left disabled:opacity-50"
+                            >
+                                <div>
+                                    <p className="text-xl font-black uppercase">Apoyo</p>
+                                    <p className="text-[10px] opacity-60 font-bold uppercase tracking-widest mt-1">Personal de refuerzo temporal</p>
+                                </div>
+                                <Users className="h-6 w-6 opacity-40 group-hover:opacity-100" />
+                            </button>
+                        </div>
+
                         <button
-                            onClick={() => handleConfirmStaffEntry('colaborador')}
+                            onClick={() => {
+                                setShowStaffTypeModal(false);
+                                setPendingStaffMaestro(null);
+                            }}
                             disabled={staffActionLoading}
-                            className="group relative flex items-center justify-between p-6 bg-white/5 hover:bg-success-green hover:text-black rounded-3xl border border-white/10 transition-all text-left disabled:opacity-50"
+                            className="text-gray-500 font-black text-[10px] uppercase tracking-[0.3em] hover:text-white transition-colors"
                         >
-                            <div>
-                                <p className="text-xl font-black uppercase">Colaborador</p>
-                                <p className="text-[10px] opacity-60 font-bold uppercase tracking-widest mt-1">Personal base de la línea</p>
-                            </div>
-                            <Activity className="h-6 w-6 opacity-40 group-hover:opacity-100" />
-                        </button>
-
-                        <button
-                            onClick={() => handleConfirmStaffEntry('apoyo')}
-                            disabled={staffActionLoading}
-                            className="group relative flex items-center justify-between p-6 bg-white/5 hover:bg-primary-blue hover:text-white rounded-3xl border border-white/10 transition-all text-left disabled:opacity-50"
-                        >
-                            <div>
-                                <p className="text-xl font-black uppercase">Apoyo</p>
-                                <p className="text-[10px] opacity-60 font-bold uppercase tracking-widest mt-1">Personal de refuerzo temporal</p>
-                            </div>
-                            <Users className="h-6 w-6 opacity-40 group-hover:opacity-100" />
+                            Cancelar registro
                         </button>
                     </div>
-
-                    <button
-                        onClick={() => {
-                            setShowStaffTypeModal(false);
-                            setPendingStaffMaestro(null);
-                        }}
-                        disabled={staffActionLoading}
-                        className="text-gray-500 font-black text-[10px] uppercase tracking-[0.3em] hover:text-white transition-colors"
-                    >
-                        Cancelar registro
-                    </button>
                 </div>
-        </div>
-    )
-}
+            )}
 
-{/* MODAL DE PERSONAL */ }
-{
-    showStaffModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-            <div className="glass w-full max-w-2xl rounded-[2.5rem] overflow-hidden flex flex-col max-h-[85vh] border-white/10 shadow-2xl">
-                <div className="p-8 border-b border-white/10 flex items-center justify-between bg-white/5">
-                    <h3 className="text-2xl font-black flex items-center gap-3">
-                        <Users className="h-7 w-7 text-primary-blue" /> PERSONAL EN LINEA
-                    </h3>
-                    <button onClick={() => setShowStaffModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-                        <X className="h-7 w-7" />
-                    </button>
-                </div>
-                <div className="p-8 overflow-auto flex-1 space-y-4">
-                    <div className="flex justify-between items-center mb-4">
-                        <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">Colaboradores cargados en el proceso</p>
-                    </div>
-                    {(() => {
-                        const activos = colaboradores.filter(c => !c.horaSalida);
-                        const historico = colaboradores.filter(c => c.horaSalida);
+            {/* MODAL DE PERSONAL */}
+            {showStaffModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+                    <div className="glass w-full max-w-2xl rounded-[2.5rem] overflow-hidden flex flex-col max-h-[85vh] border-white/10 shadow-2xl">
+                        <div className="p-8 border-b border-white/10 flex items-center justify-between bg-white/5">
+                            <h3 className="text-2xl font-black flex items-center gap-3">
+                                <Users className="h-7 w-7 text-primary-blue" /> PERSONAL EN LINEA
+                            </h3>
+                            <button onClick={() => setShowStaffModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                                <X className="h-7 w-7" />
+                            </button>
+                        </div>
+                        <div className="p-8 overflow-auto flex-1 space-y-4">
+                            <div className="flex justify-between items-center mb-4">
+                                <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">Colaboradores cargados en el proceso</p>
+                            </div>
+                            {(() => {
+                                const activos = colaboradores.filter(c => !c.horaSalida);
+                                const historico = colaboradores.filter(c => c.horaSalida);
 
-                        return (
-                            <div className="space-y-10">
-                                {/* SECCIÓN ACTIVO */}
-                                <section>
-                                    <div className="flex items-center gap-4 mb-6">
-                                        <div className="h-px flex-1 bg-success-green/20" />
-                                        <h4 className="text-[10px] font-black text-success-green uppercase tracking-[0.4em]">Personal Activo ({activos.length})</h4>
-                                        <div className="h-px flex-1 bg-success-green/20" />
-                                    </div>
-                                    <div className="grid grid-cols-1 gap-3">
-                                        {activos.length === 0 ? (
-                                            <p className="text-center py-8 text-gray-500 font-bold uppercase tracking-widest text-xs border-2 border-dashed border-white/5 rounded-3xl">No hay personal activo en este momento</p>
-                                        ) : (
-                                            activos.map((colab) => (
-                                                <div key={colab.id} className="flex items-center justify-between p-5 bg-white/5 rounded-3xl border border-white/5 group hover:border-white/20 transition-all">
-                                                    <div className="flex items-center gap-5">
-                                                        <div className={cn(
-                                                            "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm",
-                                                            colab.tipo === 'apoyo' ? "bg-primary-blue/20 text-primary-blue" : "bg-success-green/20 text-success-green"
-                                                        )}>
-                                                            {colab.nombre.substring(0, 2).toUpperCase()}
-                                                        </div>
-                                                        <div>
-                                                            <div className="flex items-center gap-3">
-                                                                <p className="font-black text-lg uppercase">{colab.nombre}</p>
-                                                                <span className={cn(
-                                                                    "px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border",
-                                                                    colab.tipo === 'apoyo'
-                                                                        ? "bg-primary-blue/10 text-primary-blue border-primary-blue/20"
-                                                                        : "bg-success-green/10 text-success-green border-success-green/20"
+                                return (
+                                    <div className="space-y-10">
+                                        {/* SECCIÓN ACTIVO */}
+                                        <section>
+                                            <div className="flex items-center gap-4 mb-6">
+                                                <div className="h-px flex-1 bg-success-green/20" />
+                                                <h4 className="text-[10px] font-black text-success-green uppercase tracking-[0.4em]">Personal Activo ({activos.length})</h4>
+                                                <div className="h-px flex-1 bg-success-green/20" />
+                                            </div>
+                                            <div className="grid grid-cols-1 gap-3">
+                                                {activos.length === 0 ? (
+                                                    <p className="text-center py-8 text-gray-500 font-bold uppercase tracking-widest text-xs border-2 border-dashed border-white/5 rounded-3xl">No hay personal activo en este momento</p>
+                                                ) : (
+                                                    activos.map((colab) => (
+                                                        <div key={colab.id} className="flex items-center justify-between p-5 bg-white/5 rounded-3xl border border-white/5 group hover:border-white/20 transition-all">
+                                                            <div className="flex items-center gap-5">
+                                                                <div className={cn(
+                                                                    "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm",
+                                                                    colab.tipo === 'apoyo' ? "bg-primary-blue/20 text-primary-blue" : "bg-success-green/20 text-success-green"
                                                                 )}>
-                                                                    {colab.tipo}
-                                                                </span>
+                                                                    {colab.nombre.substring(0, 2).toUpperCase()}
+                                                                </div>
+                                                                <div>
+                                                                    <div className="flex items-center gap-3">
+                                                                        <p className="font-black text-lg uppercase">{colab.nombre}</p>
+                                                                        <span className={cn(
+                                                                            "px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border",
+                                                                            colab.tipo === 'apoyo'
+                                                                                ? "bg-primary-blue/10 text-primary-blue border-primary-blue/20"
+                                                                                : "bg-success-green/10 text-success-green border-success-green/20"
+                                                                        )}>
+                                                                            {colab.tipo}
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em] mt-0.5">
+                                                                        ID: {colab.colaboradorId} • Ingreso: {format((colab.horaIngreso as any).toDate(), 'HH:mm')}
+                                                                    </p>
+                                                                </div>
                                                             </div>
-                                                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em] mt-0.5">
-                                                                ID: {colab.colaboradorId} • Ingreso: {format((colab.horaIngreso as any).toDate(), 'HH:mm')}
-                                                            </p>
+                                                            <div className="flex items-center gap-6">
+                                                                <div className="text-right hidden sm:block">
+                                                                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Estado</p>
+                                                                    <p className="font-mono text-xs text-success-green font-bold animate-pulse uppercase">En Línea</p>
+                                                                </div>
+                                                                {proceso.estado !== 'Finalizado' && (
+                                                                    <button
+                                                                        onClick={() => handleSalidaColaborador(colab.id, colab.nombre)}
+                                                                        className="p-3 bg-danger-red/10 text-danger-red rounded-xl hover:bg-danger-red hover:text-white transition-all shadow-lg"
+                                                                        title="Registrar Salida"
+                                                                    >
+                                                                        <LogOut className="h-4 w-4" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-6">
-                                                        <div className="text-right hidden sm:block">
-                                                            <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Estado</p>
-                                                            <p className="font-mono text-xs text-success-green font-bold animate-pulse uppercase">En Línea</p>
-                                                        </div>
-                                                        {proceso.estado !== 'Finalizado' && (
-                                                            <button
-                                                                onClick={() => handleSalidaColaborador(colab.id, colab.nombre)}
-                                                                className="p-3 bg-danger-red/10 text-danger-red rounded-xl hover:bg-danger-red hover:text-white transition-all shadow-lg"
-                                                                title="Registrar Salida"
-                                                            >
-                                                                <LogOut className="h-4 w-4" />
-                                                            </button>
-                                                        )}
-                                                    </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </section>
+
+                                        {/* SECCIÓN HISTÓRICO */}
+                                        {historico.length > 0 && (
+                                            <section className="pb-4">
+                                                <div className="flex items-center gap-4 mb-6">
+                                                    <div className="h-px flex-1 bg-white/5" />
+                                                    <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em]">Historial de Movimientos ({historico.length})</h4>
+                                                    <div className="h-px flex-1 bg-white/5" />
                                                 </div>
-                                            ))
+                                                <div className="grid grid-cols-1 gap-2">
+                                                    {historico.map((colab) => (
+                                                        <div key={colab.id} className="flex items-center justify-between p-4 bg-white/[0.02] rounded-2xl border border-white/[0.02] opacity-60 hover:opacity-100 transition-all">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center font-black text-xs text-gray-400">
+                                                                    {colab.nombre.substring(0, 2).toUpperCase()}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="font-bold text-sm uppercase text-gray-300">{colab.nombre}</p>
+                                                                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-tight">
+                                                                        {colab.tipo} • ID: {colab.colaboradorId}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className="text-[9px] font-black text-gray-600 uppercase">Movimiento</p>
+                                                                <p className="font-mono text-[10px] text-gray-500 italic">
+                                                                    {format((colab.horaIngreso as any).toDate(), 'HH:mm')} {'->'} {format((colab.horaSalida as any).toDate(), 'HH:mm')}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </section>
                                         )}
                                     </div>
-                                </section>
-
-                                {/* SECCIÓN HISTÓRICO */}
-                                {historico.length > 0 && (
-                                    <section className="pb-4">
-                                        <div className="flex items-center gap-4 mb-6">
-                                            <div className="h-px flex-1 bg-white/5" />
-                                            <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em]">Historial de Movimientos ({historico.length})</h4>
-                                            <div className="h-px flex-1 bg-white/5" />
-                                        </div>
-                                        <div className="grid grid-cols-1 gap-2">
-                                            {historico.map((colab) => (
-                                                <div key={colab.id} className="flex items-center justify-between p-4 bg-white/[0.02] rounded-2xl border border-white/[0.02] opacity-60 hover:opacity-100 transition-all">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center font-black text-xs text-gray-400">
-                                                            {colab.nombre.substring(0, 2).toUpperCase()}
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-bold text-sm uppercase text-gray-300">{colab.nombre}</p>
-                                                            <p className="text-[9px] text-gray-500 font-bold uppercase tracking-tight">
-                                                                {colab.tipo} • ID: {colab.colaboradorId}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-[9px] font-black text-gray-600 uppercase">Movimiento</p>
-                                                        <p className="font-mono text-[10px] text-gray-500 italic">
-                                                            {format((colab.horaIngreso as any).toDate(), 'HH:mm')} {'->'} {format((colab.horaSalida as any).toDate(), 'HH:mm')}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </section>
-                                )}
-                            </div>
-                        );
-                    })()}
+                                );
+                            })()}
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
-    )
-}
+            )}
 
-{/* MODAL DE EVENTOS */ }
-{
-    showEventsModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-            <div className="glass w-full max-w-2xl rounded-[2.5rem] overflow-hidden flex flex-col max-h-[85vh] border-white/10 shadow-2xl">
-                <div className="p-8 border-b border-white/10 flex items-center justify-between bg-white/5">
-                    <h3 className="text-2xl font-black flex items-center gap-3">
-                        <History className="h-7 w-7 text-primary-blue" /> HISTORIAL DE EVENTOS
-                    </h3>
-                    <button onClick={() => setShowEventsModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-                        <X className="h-7 w-7" />
-                    </button>
-                </div>
-                <div className="p-8 overflow-auto flex-1 space-y-6">
-                    {eventos.map((ev) => (
-                        <div key={ev.id} className="relative pl-8 border-l-2 border-primary-blue/30 pb-6 last:pb-0">
-                            <div className="absolute top-0 -left-[9px] h-4 w-4 rounded-full bg-primary-blue border-4 border-black" />
-                            <div className="flex justify-between items-start mb-2">
-                                <p className="text-xs font-black text-primary-blue uppercase tracking-widest">
-                                    {ev.horaEvento ? format((ev.horaEvento as any).toDate(), 'HH:mm:ss') : 'Reciente'}
-                                </p>
-                                <span className="text-[10px] font-bold text-gray-500 bg-white/5 px-2 py-1 rounded-lg">
-                                    {ev.clasificacion}
-                                </span>
-                            </div>
-                            <p className="text-lg font-black text-gray-100 mb-1">{ev.evento}</p>
-                            {ev.justificacion && (
-                                <div className="bg-white/5 p-4 rounded-2xl border border-white/5 mt-3">
-                                    <p className="text-sm text-gray-400 italic font-medium leading-relaxed">"{ev.justificacion}"</p>
+            {/* MODAL DE EVENTOS */}
+            {showEventsModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+                    <div className="glass w-full max-w-2xl rounded-[2.5rem] overflow-hidden flex flex-col max-h-[85vh] border-white/10 shadow-2xl">
+                        <div className="p-8 border-b border-white/10 flex items-center justify-between bg-white/5">
+                            <h3 className="text-2xl font-black flex items-center gap-3">
+                                <History className="h-7 w-7 text-primary-blue" /> HISTORIAL DE EVENTOS
+                            </h3>
+                            <button onClick={() => setShowEventsModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                                <X className="h-7 w-7" />
+                            </button>
+                        </div>
+                        <div className="p-8 overflow-auto flex-1 space-y-6">
+                            {eventos.map((ev) => (
+                                <div key={ev.id} className="relative pl-8 border-l-2 border-primary-blue/30 pb-6 last:pb-0">
+                                    <div className="absolute top-0 -left-[9px] h-4 w-4 rounded-full bg-primary-blue border-4 border-black" />
+                                    <div className="flex justify-between items-start mb-2">
+                                        <p className="text-xs font-black text-primary-blue uppercase tracking-widest">
+                                            {ev.horaEvento ? format((ev.horaEvento as any).toDate(), 'HH:mm:ss') : 'Reciente'}
+                                        </p>
+                                        <span className="text-[10px] font-bold text-gray-500 bg-white/5 px-2 py-1 rounded-lg">
+                                            {ev.clasificacion}
+                                        </span>
+                                    </div>
+                                    <p className="text-lg font-black text-gray-100 mb-1">{ev.evento}</p>
+                                    {ev.justificacion && (
+                                        <div className="bg-white/5 p-4 rounded-2xl border border-white/5 mt-3">
+                                            <p className="text-sm text-gray-400 italic font-medium leading-relaxed">"{ev.justificacion}"</p>
+                                        </div>
+                                    )}
+                                    <p className="text-[10px] text-gray-600 font-bold mt-4 uppercase tracking-tighter">Registrado por: {ev.registradoPorUsuario}</p>
                                 </div>
-                            )}
-                            <p className="text-[10px] text-gray-600 font-bold mt-4 uppercase tracking-tighter">Registrado por: {ev.registradoPorUsuario}</p>
+                            ))}
                         </div>
-                    ))}
+                    </div>
                 </div>
-            </div>
-        </div>
-    )
-}
+            )}
 
-{/* VENTANA DE CALIDAD */ }
-{
-    (proceso.calidadEstado === 'esperando' || proceso.calidadEstado === 'inspeccion') && !isCalidadMinimized && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
-            <div className="bg-warning-yellow p-10 rounded-[4rem] shadow-[0_0_100px_rgba(251,191,36,0.5)] max-w-xl w-full transform animate-in fade-in zoom-in duration-300 border-4 border-black/10 relative">
-                <button
-                    onClick={() => setIsCalidadMinimized(true)}
-                    className="absolute top-8 right-8 p-4 bg-black/10 hover:bg-black/20 rounded-full transition-all text-black"
-                    title="Minimizar ventana"
-                >
-                    <Minus className="h-8 w-8" />
-                </button>
-                <div className="flex flex-col items-center text-center gap-8">
-                    <div className="bg-black/10 p-6 rounded-full shadow-inner">
-                        <ShieldCheck className="h-20 w-20 text-black animate-pulse" />
-                    </div>
-
-                    <div className="space-y-2">
-                        <h3 className="text-[clamp(2rem,6vw,4rem)] font-black uppercase tracking-tighter text-black leading-tight">
-                            {proceso.calidadEstado === 'esperando' ? 'En espera de calidad' : 'Inspección de calidad'}
-                        </h3>
-                        <div className="flex items-center justify-center gap-2 text-black/50 font-black uppercase tracking-[0.2em] text-[clamp(0.7rem,1.2vw,0.875rem)]">
-                            <Clock className="h-4 w-4" />
-                            {proceso.calidadEstado === 'esperando' ? 'Tiempo transcurrido' : 'Tiempo en inspección'}
-                        </div>
-                        <div className="text-[clamp(4rem,15vw,8rem)] font-mono font-black text-black mt-4 tracking-tighter drop-shadow-sm">
-                            {calidadTimerStr}
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col gap-4 w-full mt-2">
-                        {proceso.calidadEstado === 'esperando' ? (
-                            <button
-                                onClick={() => handleCalidadAction('arrival')}
-                                className="w-full bg-black text-warning-yellow py-6 rounded-3xl font-black text-2xl hover:bg-gray-900 transition-all flex items-center justify-center gap-4 shadow-xl translate-y-0 active:translate-y-1"
-                            >
-                                <Timer className="h-8 w-8" /> INICIO CALIDAD
-                            </button>
-                        ) : (
-                            <button
-                                onClick={() => handleCalidadAction('approval')}
-                                className="w-full bg-black text-success-green py-6 rounded-3xl font-black text-2xl hover:bg-gray-900 transition-all flex items-center justify-center gap-4 shadow-xl translate-y-0 active:translate-y-1"
-                            >
-                                <Check className="h-8 w-8" /> APROBACIÓN DE CALIDAD
-                            </button>
-                        )}
-
+            {/* VENTANA DE CALIDAD */}
+            {(proceso.calidadEstado === 'esperando' || proceso.calidadEstado === 'inspeccion') && !isCalidadMinimized && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
+                    <div className="bg-warning-yellow p-10 rounded-[4rem] shadow-[0_0_100px_rgba(251,191,36,0.5)] max-w-xl w-full transform animate-in fade-in zoom-in duration-300 border-4 border-black/10 relative">
                         <button
-                            onClick={() => handleCalidadAction('reset')}
-                            className="text-black/40 font-black uppercase tracking-widest text-xs hover:text-black transition-colors mt-2"
+                            onClick={() => setIsCalidadMinimized(true)}
+                            className="absolute top-8 right-8 p-4 bg-black/10 hover:bg-black/20 rounded-full transition-all text-black"
+                            title="Minimizar ventana"
                         >
-                            Cancelar o Reiniciar Proceso de Calidad
+                            <Minus className="h-8 w-8" />
                         </button>
+                        <div className="flex flex-col items-center text-center gap-8">
+                            <div className="bg-black/10 p-6 rounded-full shadow-inner">
+                                <ShieldCheck className="h-20 w-20 text-black animate-pulse" />
+                            </div>
+
+                            <div className="space-y-2">
+                                <h3 className="text-[clamp(2rem,6vw,4rem)] font-black uppercase tracking-tighter text-black leading-tight">
+                                    {proceso.calidadEstado === 'esperando' ? 'En espera de calidad' : 'Inspección de calidad'}
+                                </h3>
+                                <div className="flex items-center justify-center gap-2 text-black/50 font-black uppercase tracking-[0.2em] text-[clamp(0.7rem,1.2vw,0.875rem)]">
+                                    <Clock className="h-4 w-4" />
+                                    {proceso.calidadEstado === 'esperando' ? 'Tiempo transcurrido' : 'Tiempo en inspección'}
+                                </div>
+                                <div className="text-[clamp(4rem,15vw,8rem)] font-mono font-black text-black mt-4 tracking-tighter drop-shadow-sm">
+                                    {calidadTimerStr}
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-4 w-full mt-2">
+                                {proceso.calidadEstado === 'esperando' ? (
+                                    <button
+                                        onClick={() => handleCalidadAction('arrival')}
+                                        className="w-full bg-black text-warning-yellow py-6 rounded-3xl font-black text-2xl hover:bg-gray-900 transition-all flex items-center justify-center gap-4 shadow-xl translate-y-0 active:translate-y-1"
+                                    >
+                                        <Timer className="h-8 w-8" /> INICIO CALIDAD
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => handleCalidadAction('approval')}
+                                        className="w-full bg-black text-success-green py-6 rounded-3xl font-black text-2xl hover:bg-gray-900 transition-all flex items-center justify-center gap-4 shadow-xl translate-y-0 active:translate-y-1"
+                                    >
+                                        <Check className="h-8 w-8" /> APROBACIÓN DE CALIDAD
+                                    </button>
+                                )}
+
+                                <button
+                                    onClick={() => handleCalidadAction('reset')}
+                                    className="text-black/40 font-black uppercase tracking-widest text-xs hover:text-black transition-colors mt-2"
+                                >
+                                    Cancelar o Reiniciar Proceso de Calidad
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    )
-}
+            )}
 
-{/* POPUP DE NOTIFICACIÓN DE PERSONAL (4 SEGUNDOS) */ }
-{
-    staffMessage && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 pointer-events-none">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-            <div className={cn(
-                "glass relative min-w-[600px] p-16 rounded-[4rem] border-4 shadow-[0_0_150px_rgba(0,0,0,0.8)] transform animate-in fade-in zoom-in duration-500 flex flex-col items-center gap-10",
-                staffMessage.type === 'success' ? "border-success-green/60 bg-success-green/10" :
-                    (staffMessage.type === 'error' || staffMessage.type === 'exit') ? "border-danger-red/60 bg-danger-red/10" :
-                        "border-primary-blue/60 bg-primary-blue/10"
-            )}>
-                <div className={cn(
-                    "p-10 rounded-full shadow-2xl",
-                    staffMessage.type === 'success' ? "bg-success-green text-black" :
-                        (staffMessage.type === 'error' || staffMessage.type === 'exit') ? "bg-danger-red text-white" :
-                            "bg-primary-blue text-white"
-                )}>
-                    {staffMessage.type === 'success' ? <UserPlus className="h-24 w-24" /> :
-                        staffMessage.type === 'exit' ? <LogOut className="h-24 w-24" /> :
-                            staffMessage.type === 'error' ? <X className="h-24 w-24" /> :
-                                <Users className="h-24 w-24" />}
-                </div>
-                <h4 className={cn(
-                    "text-6xl font-black text-center uppercase tracking-tighter leading-tight max-w-[800px]",
-                    staffMessage.type === 'success' ? "text-success-green" :
-                        (staffMessage.type === 'error' || staffMessage.type === 'exit') ? "text-danger-red" :
-                            "text-primary-blue"
-                )}>
-                    {staffMessage.text}
-                </h4>
-                <div className="w-full max-w-sm h-2 bg-white/10 rounded-full overflow-hidden mt-4">
+            {/* POPUP DE NOTIFICACIÓN DE PERSONAL (4 SEGUNDOS) */}
+            {staffMessage && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 pointer-events-none">
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
                     <div className={cn(
-                        "h-full animate-[progress_4s_linear]",
-                        staffMessage.type === 'success' ? "bg-success-green" :
-                            (staffMessage.type === 'error' || staffMessage.type === 'exit') ? "bg-danger-red" :
-                                "bg-primary-blue"
-                    )} />
-                </div>
-            </div>
-        </div>
-    )
-}
-{
-    showEditModal && proceso && (
-        <ModalEditarProceso
-            proceso={proceso}
-            onClose={() => setShowEditModal(false)}
-            onSave={async (updates) => {
-                await updateProceso(id, updates);
-                await addEventoLog(id, "Valores Modificados", "Se editaron los valores base del proceso", "SISTEMA", user?.username || "Sistema");
-            }}
-        />
-    )
-}
-
-{/* MODAL DE REPROCESO */ }
-{
-    showReprocesoModal && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
-            <div className="glass w-full max-w-2xl rounded-[3rem] overflow-hidden flex flex-col border-white/10 shadow-2xl animate-in zoom-in duration-300">
-                <div className="p-8 md:p-12 border-b border-white/10 flex flex-col items-center text-center bg-white/5">
-                    <History className="h-16 w-16 text-amber-500 mb-6 animate-pulse" />
-                    <h3 className="text-3xl font-black uppercase tracking-tighter mb-2">CRONÓMETRO DE REPROCESO</h3>
-                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Midiéndo tiempo de corrección post-producción</p>
-                </div>
-                <div className="p-12 md:p-20 flex flex-col items-center space-y-12">
-                    <div className="text-8xl md:text-9xl font-black font-mono tracking-tighter text-white drop-shadow-[0_0_30px_rgba(251,191,36,0.2)]">
-                        {reprocesoTimerStr}
-                    </div>
-
-                    <div className="w-full flex flex-col md:flex-row gap-4">
-                        <button
-                            onClick={() => handleReprocesoAction('finish')}
-                            className="flex-1 bg-amber-500 text-black font-black py-6 rounded-3xl text-xl flex items-center justify-center gap-4 hover:bg-amber-400 transition-all shadow-xl shadow-amber-500/20"
-                        >
-                            <Check className="h-8 w-8" /> TERMINAR REPROCESO
-                        </button>
-                        <button
-                            onClick={() => setShowReprocesoModal(false)}
-                            className="px-10 bg-white/5 text-white font-black py-6 rounded-3xl text-xl hover:bg-white/10 transition-all border border-white/10"
-                        >
-                            CERRAR VISTA
-                        </button>
+                        "glass relative min-w-[600px] p-16 rounded-[4rem] border-4 shadow-[0_0_150px_rgba(0,0,0,0.8)] transform animate-in fade-in zoom-in duration-500 flex flex-col items-center gap-10",
+                        staffMessage.type === 'success' ? "border-success-green/60 bg-success-green/10" :
+                            (staffMessage.type === 'error' || staffMessage.type === 'exit') ? "border-danger-red/60 bg-danger-red/10" :
+                                "border-primary-blue/60 bg-primary-blue/10"
+                    )}>
+                        <div className={cn(
+                            "p-10 rounded-full shadow-2xl",
+                            staffMessage.type === 'success' ? "bg-success-green text-black" :
+                                (staffMessage.type === 'error' || staffMessage.type === 'exit') ? "bg-danger-red text-white" :
+                                    "bg-primary-blue text-white"
+                        )}>
+                            {staffMessage.type === 'success' ? <UserPlus className="h-24 w-24" /> :
+                                staffMessage.type === 'exit' ? <LogOut className="h-24 w-24" /> :
+                                    staffMessage.type === 'error' ? <X className="h-24 w-24" /> :
+                                        <Users className="h-24 w-24" />}
+                        </div>
+                        <h4 className={cn(
+                            "text-6xl font-black text-center uppercase tracking-tighter leading-tight max-w-[800px]",
+                            staffMessage.type === 'success' ? "text-success-green" :
+                                (staffMessage.type === 'error' || staffMessage.type === 'exit') ? "text-danger-red" :
+                                    "text-primary-blue"
+                        )}>
+                            {staffMessage.text}
+                        </h4>
+                        <div className="w-full max-w-sm h-2 bg-white/10 rounded-full overflow-hidden mt-4">
+                            <div className={cn(
+                                "h-full animate-[progress_4s_linear]",
+                                staffMessage.type === 'success' ? "bg-success-green" :
+                                    (staffMessage.type === 'error' || staffMessage.type === 'exit') ? "bg-danger-red" :
+                                        "bg-primary-blue"
+                            )} />
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
+            {showEditModal && proceso && (
+                <ModalEditarProceso
+                    proceso={proceso}
+                    onClose={() => setShowEditModal(false)}
+                    onSave={async (updates) => {
+                        await updateProceso(id, updates);
+                        await addEventoLog(id, "Valores Modificados", "Se editaron los valores base del proceso", "SISTEMA", user?.username || "Sistema");
+                    }}
+                />
+            )}
+
+            {/* MODAL DE REPROCESO */}
+            {showReprocesoModal && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
+                    <div className="glass w-full max-w-2xl rounded-[3rem] overflow-hidden flex flex-col border-white/10 shadow-2xl animate-in zoom-in duration-300">
+                        <div className="p-8 md:p-12 border-b border-white/10 flex flex-col items-center text-center bg-white/5">
+                            <History className="h-16 w-16 text-amber-500 mb-6 animate-pulse" />
+                            <h3 className="text-3xl font-black uppercase tracking-tighter mb-2">CRONÓMETRO DE REPROCESO</h3>
+                            <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Midiéndo tiempo de corrección post-producción</p>
+                        </div>
+                        <div className="p-12 md:p-20 flex flex-col items-center space-y-12">
+                            <div className="text-8xl md:text-9xl font-black font-mono tracking-tighter text-white drop-shadow-[0_0_30px_rgba(251,191,36,0.2)]">
+                                {reprocesoTimerStr}
+                            </div>
+
+                            <div className="w-full flex flex-col md:flex-row gap-4">
+                                <button
+                                    onClick={() => handleReprocesoAction('finish')}
+                                    className="flex-1 bg-amber-500 text-black font-black py-6 rounded-3xl text-xl flex items-center justify-center gap-4 hover:bg-amber-400 transition-all shadow-xl shadow-amber-500/20"
+                                >
+                                    <Check className="h-8 w-8" /> TERMINAR REPROCESO
+                                </button>
+                                <button
+                                    onClick={() => setShowReprocesoModal(false)}
+                                    className="px-10 bg-white/5 text-white font-black py-6 rounded-3xl text-xl hover:bg-white/10 transition-all border border-white/10"
+                                >
+                                    CERRAR VISTA
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
-    )
-}
-        </div >
     );
 }
