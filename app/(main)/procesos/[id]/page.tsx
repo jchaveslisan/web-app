@@ -1044,22 +1044,22 @@ export default function MonitoreoPage() {
                                         <h4 className="text-[clamp(1.8rem,2.8vw,2.5rem)] font-black text-white leading-tight uppercase line-clamp-2">{proceso.producto}</h4>
                                     </div>
 
-                                    {/* Líder de Línea - Prominente */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div className="space-y-2 bg-primary-blue/10 p-5 rounded-3xl border border-primary-blue/20">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <Users className="h-5 w-5 text-primary-blue" />
-                                                <p className="text-[clamp(0.6rem,1vw,0.75rem)] font-black text-primary-blue uppercase tracking-widest">Líder de Línea</p>
-                                            </div>
-                                            <h4 className="text-[clamp(1.4rem,2vw,1.8rem)] font-black text-white uppercase truncate">{proceso.lider}</h4>
+                                    {/* Líder de Línea - Fila única para nombres largos */}
+                                    <div className="space-y-2 bg-primary-blue/10 p-6 rounded-3xl border border-primary-blue/20">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Users className="h-5 w-5 text-primary-blue" />
+                                            <p className="text-[clamp(0.6rem,1vw,0.75rem)] font-black text-primary-blue uppercase tracking-widest">Líder de Línea</p>
                                         </div>
-                                        <div className="space-y-2 bg-white/5 p-5 rounded-3xl border border-white/10">
-                                            <p className="text-[clamp(0.6rem,1vw,0.75rem)] font-black text-gray-500 uppercase tracking-widest mb-1">Orden de Producción</p>
-                                            <p className="text-[clamp(1.4rem,2vw,1.8rem)] font-mono font-black text-white truncate">{proceso.ordenProduccion}</p>
-                                        </div>
+                                        <h4 className="text-[clamp(1.6rem,2.2vw,2rem)] font-black text-white uppercase">{proceso.lider}</h4>
                                     </div>
 
-                                    {/* Lote / Etapa / Línea Grid */}
+                                    {/* Orden de Producción - Más grande y destacada */}
+                                    <div className="space-y-2 bg-white/5 p-6 rounded-3xl border border-white/10">
+                                        <p className="text-[clamp(0.6rem,1vw,0.75rem)] font-black text-gray-500 uppercase tracking-widest mb-1">Orden de Producción</p>
+                                        <p className="text-[clamp(2rem,3.5vw,3rem)] font-mono font-black text-white leading-none">{proceso.ordenProduccion}</p>
+                                    </div>
+
+                                    {/* Grid de Información Secundaria: Lote, Etapa, Línea */}
                                     <div className="grid grid-cols-3 gap-4">
                                         <div className="bg-white/5 p-5 rounded-3xl border border-white/10 text-center">
                                             <p className="text-[clamp(0.6rem,1vw,0.75rem)] font-black text-gray-500 uppercase mb-1">Lote</p>
@@ -1075,15 +1075,15 @@ export default function MonitoreoPage() {
                                         </div>
                                     </div>
 
-                                    {/* FECHAS GIGANTES - Como pidió el usuario */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                                        <div className="bg-success-green/5 p-7 rounded-[2.5rem] border-2 border-success-green/20 flex flex-col items-center justify-center gap-2 group hover:bg-success-green/[0.08] transition-all">
-                                            <p className="text-[clamp(0.8rem,1.4vw,1.1rem)] font-black text-success-green/60 uppercase tracking-[0.4em]">Fabricación</p>
-                                            <p className="text-[clamp(2.5rem,4.5vw,4.5rem)] font-mono font-black text-white leading-none drop-shadow-sm">{proceso.fechaFabricacion || '--/--/--'}</p>
+                                    {/* Fechas de Fabricación y Vencimiento - Mismo diseño que las anteriores */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-success-green/5 p-5 rounded-3xl border border-success-green/20 text-center flex flex-col items-center justify-center">
+                                            <p className="text-[clamp(0.6rem,1vw,0.75rem)] font-black text-success-green/60 uppercase mb-1">Fabricación</p>
+                                            <p className="text-[clamp(1.5rem,2.2vw,2.5rem)] font-mono font-black text-white">{proceso.fechaFabricacion || '--/--'}</p>
                                         </div>
-                                        <div className="bg-danger-red/5 p-7 rounded-[2.5rem] border-2 border-danger-red/20 flex flex-col items-center justify-center gap-2 group hover:bg-danger-red/[0.08] transition-all">
-                                            <p className="text-[clamp(0.8rem,1.4vw,1.1rem)] font-black text-danger-red/60 uppercase tracking-[0.4em]">Vencimiento</p>
-                                            <p className="text-[clamp(2.5rem,4.5vw,4.5rem)] font-mono font-black text-white leading-none drop-shadow-sm">{proceso.fechaExpira || '--/--/--'}</p>
+                                        <div className="bg-danger-red/5 p-5 rounded-3xl border border-danger-red/20 text-center flex flex-col items-center justify-center">
+                                            <p className="text-[clamp(0.6rem,1vw,0.75rem)] font-black text-danger-red/60 uppercase mb-1">Vencimiento</p>
+                                            <p className="text-[clamp(1.5rem,2.2vw,2.5rem)] font-mono font-black text-white">{proceso.fechaExpira || '--/--'}</p>
                                         </div>
                                     </div>
                                 </div>
