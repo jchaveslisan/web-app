@@ -21,7 +21,10 @@ export default function ModalEditarProceso({ proceso, onClose, onSave }: ModalEd
         etapa: proceso.etapa || '',
         cantidadProducir: proceso.cantidadProducir || 0,
         velocidadTeorica: proceso.velocidadTeorica || 0,
-        lider: proceso.lider || ''
+        lider: proceso.lider || '',
+        linea: proceso.linea || 'Humano',
+        fechaFabricacion: proceso.fechaFabricacion || '',
+        fechaExpira: proceso.fechaExpira || ''
     });
     const [etapas, setEtapas] = useState<Etapa[]>([]);
     const [loading, setLoading] = useState(false);
@@ -162,6 +165,44 @@ export default function ModalEditarProceso({ proceso, onClose, onSave }: ModalEd
                             onChange={(e) => setFormData({ ...formData, lider: e.target.value.toUpperCase() })}
                             className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
                             required
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Línea</label>
+                            <select
+                                value={formData.linea}
+                                onChange={(e) => setFormData({ ...formData, linea: e.target.value as any })}
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all text-white"
+                                required
+                            >
+                                <option value="Humano" className="bg-black">Humano</option>
+                                <option value="Veterinario" className="bg-black">Veterinario</option>
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Fabricación (MM/AAAA)</label>
+                            <input
+                                type="text"
+                                value={formData.fechaFabricacion}
+                                onChange={(e) => setFormData({ ...formData, fechaFabricacion: e.target.value })}
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-mono font-bold outline-none focus:border-primary-blue transition-all"
+                                placeholder="MM/AAAA"
+                                maxLength={7}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Expiración (MM/AAAA)</label>
+                        <input
+                            type="text"
+                            value={formData.fechaExpira}
+                            onChange={(e) => setFormData({ ...formData, fechaExpira: e.target.value })}
+                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-mono font-bold outline-none focus:border-primary-blue transition-all"
+                            placeholder="MM/AAAA"
+                            maxLength={7}
                         />
                     </div>
 

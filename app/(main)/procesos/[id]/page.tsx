@@ -734,7 +734,7 @@ export default function MonitoreoPage() {
                                         </div>
 
                                         {/* Orden de Producción y Lote - lado a lado */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                             <div className="bg-white/5 p-6 rounded-2xl border border-white/5 text-center">
                                                 <p className="text-[clamp(0.6rem,1vw,0.8rem)] font-black text-gray-500 uppercase mb-1">Orden de Producción</p>
                                                 <p className="text-[clamp(1.5rem,2.5vw,2rem)] font-mono font-black text-white break-all">{proceso.ordenProduccion}</p>
@@ -743,6 +743,22 @@ export default function MonitoreoPage() {
                                             <div className="bg-white/5 p-6 rounded-2xl border border-white/5 text-center">
                                                 <p className="text-[clamp(0.6rem,1vw,0.8rem)] font-black text-gray-500 uppercase mb-1">Lote</p>
                                                 <p className="text-[clamp(1.5rem,2.5vw,2rem)] font-black text-white uppercase break-all">{proceso.lote}</p>
+                                            </div>
+
+                                            <div className="bg-white/5 p-6 rounded-2xl border border-white/5 text-center">
+                                                <p className="text-[clamp(0.6rem,1vw,0.8rem)] font-black text-gray-500 uppercase mb-1">Línea</p>
+                                                <p className="text-[clamp(1.5rem,2.5vw,2rem)] font-black text-white uppercase">{proceso.linea || 'N/A'}</p>
+                                            </div>
+
+                                            <div className="bg-white/5 p-6 rounded-2xl border border-white/5 flex flex-col justify-center gap-2">
+                                                <div className="flex justify-between items-center">
+                                                    <p className="text-[clamp(0.5rem,0.8vw,0.7rem)] font-black text-gray-500 uppercase">Fab:</p>
+                                                    <p className="text-[clamp(1rem,1.5vw,1.2rem)] font-mono font-black text-white">{proceso.fechaFabricacion || 'N/A'}</p>
+                                                </div>
+                                                <div className="flex justify-between items-center">
+                                                    <p className="text-[clamp(0.5rem,0.8vw,0.7rem)] font-black text-gray-500 uppercase">Exp:</p>
+                                                    <p className="text-[clamp(1rem,1.5vw,1.2rem)] font-mono font-black text-white">{proceso.fechaExpira || 'N/A'}</p>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -1040,6 +1056,24 @@ export default function MonitoreoPage() {
                                             <div className="bg-white/10 p-5 rounded-2xl border border-white/10">
                                                 <p className="text-[clamp(0.6rem,1vw,0.8rem)] font-black text-gray-500 uppercase mb-1">Etapa</p>
                                                 <p className="text-[clamp(1.5rem,2.5vw,2.2rem)] font-black text-white uppercase">{proceso.etapa}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Línea and Dates */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div className="bg-white/10 p-5 rounded-2xl border border-white/10">
+                                                <p className="text-[clamp(0.6rem,1vw,0.8rem)] font-black text-gray-500 uppercase mb-1">Línea</p>
+                                                <p className="text-[clamp(1.5rem,2.5vw,2.2rem)] font-black text-white uppercase">{proceso.linea || 'N/A'}</p>
+                                            </div>
+                                            <div className="bg-white/10 p-5 rounded-2xl border border-white/10 flex flex-col justify-center gap-2">
+                                                <div className="flex justify-between items-center">
+                                                    <p className="text-[clamp(0.5rem,0.8vw,0.7rem)] font-black text-gray-500 uppercase">Fabricación:</p>
+                                                    <p className="text-[clamp(1.2rem,1.8vw,1.4rem)] font-mono font-black text-white">{proceso.fechaFabricacion || 'N/A'}</p>
+                                                </div>
+                                                <div className="flex justify-between items-center">
+                                                    <p className="text-[clamp(0.5rem,0.8vw,0.7rem)] font-black text-gray-500 uppercase">Expiración:</p>
+                                                    <p className="text-[clamp(1.2rem,1.8vw,1.4rem)] font-mono font-black text-white">{proceso.fechaExpira || 'N/A'}</p>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

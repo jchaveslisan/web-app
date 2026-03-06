@@ -62,6 +62,9 @@ export default function NuevoProcesoPage() {
                 producto: data.producto,
                 lote: tipoProceso === 'empaque' || tipoProceso === 'otros' ? data.lote : 'N/A',
                 etapa: tipoProceso === 'empaque' || tipoProceso === 'otros' ? data.etapa : 'N/A',
+                fechaFabricacion: tipoProceso === 'empaque' || tipoProceso === 'otros' ? data.fechaFabricacion : 'N/A',
+                fechaExpira: tipoProceso === 'empaque' || tipoProceso === 'otros' ? data.fechaExpira : 'N/A',
+                linea: (tipoProceso === 'empaque' || tipoProceso === 'otros' ? data.linea : 'N/A') as any,
                 cantidadProducir: tipoProceso === 'empaque' ? Number(data.cantidad) : 0,
                 velocidadTeorica: tipoProceso === 'empaque' ? Number(data.velocidad) : 0,
                 lider: tipoProceso === 'empaque' ? data.lider : 'N/A',
@@ -342,6 +345,39 @@ export default function NuevoProcesoPage() {
                                         </label>
                                     </div>
                                 </div>
+
+                                {/* Nueva fila para linea y fechas */}
+                                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-white/5">
+                                    <div>
+                                        <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Línea</label>
+                                        <select
+                                            {...register('linea')}
+                                            defaultValue="Humano"
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary-blue/50 transition-all font-bold text-white"
+                                        >
+                                            <option value="Humano" className="bg-black text-white">Humano</option>
+                                            <option value="Veterinario" className="bg-black text-white">Veterinario</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Fecha Fabricación (MM/AAAA)</label>
+                                        <input
+                                            {...register('fechaFabricacion')}
+                                            placeholder="MM/AAAA"
+                                            maxLength={7}
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary-blue/50 transition-all font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Fecha Expira (MM/AAAA)</label>
+                                        <input
+                                            {...register('fechaExpira')}
+                                            placeholder="MM/AAAA"
+                                            maxLength={7}
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary-blue/50 transition-all font-mono"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         ) : tipoProceso === 'otros' ? (
                             // Formulario para "Otros Procesos" - sin temporizador pero con datos de producción
@@ -396,6 +432,39 @@ export default function NuevoProcesoPage() {
                                                 </>
                                             )}
                                         </select>
+                                    </div>
+                                </div>
+
+                                {/* Nueva fila para linea y fechas en Otros Procesos */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-white/5">
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Línea</label>
+                                        <select
+                                            {...register('linea')}
+                                            defaultValue="Humano"
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-warning-yellow/50 transition-all font-bold text-white"
+                                        >
+                                            <option value="Humano" className="bg-black text-white">Humano</option>
+                                            <option value="Veterinario" className="bg-black text-white">Veterinario</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Fecha Fabricación (MM/AAAA)</label>
+                                        <input
+                                            {...register('fechaFabricacion')}
+                                            placeholder="MM/AAAA"
+                                            maxLength={7}
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-warning-yellow/50 transition-all font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Fecha Expira (MM/AAAA)</label>
+                                        <input
+                                            {...register('fechaExpira')}
+                                            placeholder="MM/AAAA"
+                                            maxLength={7}
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-warning-yellow/50 transition-all font-mono"
+                                        />
                                     </div>
                                 </div>
 

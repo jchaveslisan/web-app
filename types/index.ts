@@ -30,6 +30,7 @@ export interface Proceso {
     etapa: string;
     fechaExpira: string;
     fechaFabricacion: string;
+    linea: 'Humano' | 'Veterinario' | 'N/A';
     clasificacion?: TipoProceso;
     cantidadProducir: number;
     velocidadTeorica: number;
