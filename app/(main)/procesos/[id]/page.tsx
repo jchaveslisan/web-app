@@ -120,6 +120,7 @@ export default function MonitoreoPage() {
     const [showCommentModal, setShowCommentModal] = useState(false);
     const [comentarios, setComentarios] = useState<Comentario[]>([]);
     const [eventsModalTab, setEventsModalTab] = useState<'eventos' | 'comentarios'>('eventos');
+    const [showEditModal, setShowEditModal] = useState(false);
 
     // Sincronizar unidades calculadas con el valor de la base de datos cuando cambia
     useEffect(() => {
