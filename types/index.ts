@@ -111,3 +111,16 @@ export interface OrdenMaestra {
     velocidadTeorica: number;
     activo: boolean;
 }
+
+export interface Comentario {
+    id: string;
+    procesoId: string;
+    colaboradorId: string;
+    nombreColaborador: string;
+    comentario: string;
+    creadoEn: any; // Firestore Timestamp
+    ordenProduccion: string;
+    etapa: string;
+    producto: string;
+}
+
