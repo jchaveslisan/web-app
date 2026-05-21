@@ -1145,7 +1145,7 @@ export default function MonitoreoPage() {
             {modalJustificacion.show && (
                 <ModalJustificacion
                     tipo={modalJustificacion.tipo}
-                    onClose={() =>
+                    onCancel={() =>
                         setModalJustificacion({ ...modalJustificacion, show: false })
                     }
                     onConfirm={handleConfirmJustificacion}
