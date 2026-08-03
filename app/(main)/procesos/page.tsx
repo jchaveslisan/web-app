@@ -506,7 +506,7 @@ export default function ProcesosPage() {
                                                                             <span className="text-[9px] font-black bg-success-green/20 text-success-green px-2 py-0.5 rounded-full uppercase tracking-widest border border-success-green/20">EN LÍNEA</span>
                                                                             <span className="text-[11px] font-bold text-white">OP: {activeProceso.ordenProduccion}</span>
                                                                         </div>
-                                                                        <p className="text-[10px] font-medium text-gray-500 truncate max-w-[200px] uppercase">{activeProceso.producto}</p>
+                                                                        <p className="text-[10px] font-medium text-gray-500 break-words max-w-[250px] uppercase leading-tight">{activeProceso.producto}</p>
                                                                     </div>
                                                                 ) : (
                                                                     <span className="text-[9px] font-black bg-white/5 text-gray-500 px-2 py-0.5 rounded-full uppercase tracking-widest border border-white/10">DISPONIBLE</span>
@@ -597,7 +597,7 @@ export default function ProcesosPage() {
                                                             <td className="p-5 font-bold text-lg text-white">{proceso.ordenProduccion}</td>
                                                             <td className="p-5">
                                                                 <div>
-                                                                    <div className="font-bold text-white max-w-[200px] truncate" title={proceso.producto}>{proceso.producto}</div>
+                                                                    <div className="font-bold text-white text-sm md:text-base leading-tight break-words max-w-[320px] uppercase" title={proceso.producto}>{proceso.producto}</div>
                                                                     <div className="text-xs text-gray-500 font-medium">Lote: {proceso.lote}</div>
                                                                 </div>
                                                             </td>
