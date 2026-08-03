@@ -22,21 +22,23 @@ import {
     Edit2,
     Plus,
     Minus,
-    Maximize2
+    Maximize2,
+    MessageSquare
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProcesoRealtime } from '@/hooks/useProcesoRealtime';
 import { format, differenceInSeconds, addSeconds } from 'date-fns';
-import { updateProceso, addEventoLog, updateDoc, getColaboradorByClave, addColaboradorToLog, getColaboradoresActivos, clearActiveColaboradoresCache } from '@/lib/firebase-db';
+import { updateProceso, addEventoLog, updateDoc, getColaboradorByClave, addColaboradorToLog, getColaboradoresActivos, clearActiveColaboradoresCache, subscribeComentarios } from '@/lib/firebase-db';
 import { useAuthStore } from '@/lib/auth-service';
 import ModalAddColaborador from '@/components/proceso/ModalAddColaborador';
 import ModalJustificacion from '@/components/proceso/ModalJustificacion';
 import ModalBulkExit from '@/components/proceso/ModalBulkExit';
 import ModalEditarProceso from '@/components/proceso/ModalEditarProceso';
+import ModalAddComentario from '@/components/proceso/ModalAddComentario';
 import { doc, Timestamp, increment } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { calculateProductivity, ProductivityStats, formatSeconds } from '@/lib/productivity-utils';
-import { ColaboradorMaestro } from '@/types';
+import { ColaboradorMaestro, Comentario } from '@/types';
 
 // Helper para determinar el tipo de proceso (backward compatibility)
 const getTipoProcesoReal = (proceso: any) => {
@@ -114,8 +116,11 @@ export default function MonitoreoPage() {
     const [reprocesoTimerStr, setReprocesoTimerStr] = useState("00:00:00");
     const [showReprocesoModal, setShowReprocesoModal] = useState(false);
     const [pauseMoment, setPauseMoment] = useState<Date | null>(null);
-    const [showEditModal, setShowEditModal] = useState(false);
     const [isCalidadMinimized, setIsCalidadMinimized] = useState(false);
+    const [showCommentModal, setShowCommentModal] = useState(false);
+    const [comentarios, setComentarios] = useState<Comentario[]>([]);
+    const [eventsModalTab, setEventsModalTab] = useState<'eventos' | 'comentarios'>('eventos');
+    const [showEditModal, setShowEditModal] = useState(false);
 
     // Sincronizar unidades calculadas con el valor de la base de datos cuando cambia
     useEffect(() => {
@@ -123,6 +128,15 @@ export default function MonitoreoPage() {
             setCalculatedUnits(proceso.trabajoCompletado || 0);
         }
     }, [proceso?.id, proceso?.trabajoCompletado]);
+
+    // Suscribirse a comentarios en tiempo real
+    useEffect(() => {
+        if (!id) return;
+        const unsubscribe = subscribeComentarios(id, (coms) => {
+            setComentarios(coms);
+        });
+        return () => unsubscribe();
+    }, [id]);
 
     // LÓGICA DE CÁLCULO DE PROGRESO TEÓRICO (CATCH-UP)
     useEffect(() => {
@@ -690,10 +704,16 @@ export default function MonitoreoPage() {
                         </button>
                     )}
                     <button
-                        onClick={() => setShowEventsModal(true)}
-                        className="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-4 py-1.5 rounded-full border border-white/10 text-xs font-black uppercase tracking-widest transition-all"
+                        onClick={() => { setEventsModalTab('eventos'); setShowEventsModal(true); }}
+                        className="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-4 py-1.5 rounded-full border border-white/10 text-xs font-black uppercase tracking-widest transition-all text-gray-300 hover:text-white"
                     >
-                        <History className="h-4 w-4" /> Historial ({eventos.length})
+                        <History className="h-4 w-4 text-primary-blue" /> Historial (E: {eventos.length} | C: {comentarios.length})
+                    </button>
+                    <button
+                        onClick={() => setShowCommentModal(true)}
+                        className="flex items-center gap-2 bg-white/5 hover:bg-white/10 px-4 py-1.5 rounded-full border border-white/10 text-xs font-black uppercase tracking-widest transition-all text-primary-blue hover:bg-primary-blue/10"
+                    >
+                        <MessageSquare className="h-4 w-4" /> Comentar
                     </button>
                     {proceso.contabilizaSetup && (
                         <div className={cn(
@@ -1128,10 +1148,21 @@ export default function MonitoreoPage() {
             {modalJustificacion.show && (
                 <ModalJustificacion
                     tipo={modalJustificacion.tipo}
+                    onCancel={() =>
+                        setModalJustificacion({ ...modalJustificacion, show: false })
+                    }
                     onConfirm={handleConfirmJustificacion}
-                    onCancel={() => {
-                        setModalJustificacion({ ...modalJustificacion, show: false });
-                        setPendingExitLog(null);
+                />
+            )}
+
+            {showCommentModal && (
+                <ModalAddComentario
+                    proceso={proceso}
+                    colaboradores={colaboradores}
+                    onClose={() => setShowCommentModal(false)}
+                    onSuccess={(msg) => {
+                        setStaffMessage({ text: msg, type: 'success' });
+                        setTimeout(() => setStaffMessage(null), 4000);
                     }}
                 />
             )}
@@ -1333,36 +1364,87 @@ export default function MonitoreoPage() {
             {
                 showEventsModal && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-                        <div className="glass w-full max-w-2xl rounded-[2.5rem] overflow-hidden flex flex-col max-h-[85vh] border-white/10 shadow-2xl">
+                        <div className="glass w-full max-w-2xl rounded-[2.5rem] overflow-hidden flex flex-col max-h-[85vh] border-white/10 shadow-2xl bg-background-dark/95">
                             <div className="p-8 border-b border-white/10 flex items-center justify-between bg-white/5">
                                 <h3 className="text-2xl font-black flex items-center gap-3">
-                                    <History className="h-7 w-7 text-primary-blue" /> HISTORIAL DE EVENTOS
+                                    <History className="h-7 w-7 text-primary-blue" /> HISTORIAL DE OPERACIÓN
                                 </h3>
                                 <button onClick={() => setShowEventsModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
                                     <X className="h-7 w-7" />
                                 </button>
                             </div>
+                            
+                            {/* Selector de Pestañas */}
+                            <div className="flex border-b border-white/10 bg-white/5 p-2">
+                                <button
+                                    onClick={() => setEventsModalTab('eventos')}
+                                    className={cn(
+                                        "flex-1 py-3 text-sm font-bold uppercase tracking-wider transition-all rounded-xl",
+                                        eventsModalTab === 'eventos' 
+                                            ? "bg-primary-blue text-white" 
+                                            : "text-gray-400 hover:text-white hover:bg-white/5"
+                                    )}
+                                >
+                                    Eventos ({eventos.length})
+                                </button>
+                                <button
+                                    onClick={() => setEventsModalTab('comentarios')}
+                                    className={cn(
+                                        "flex-1 py-3 text-sm font-bold uppercase tracking-wider transition-all rounded-xl",
+                                        eventsModalTab === 'comentarios' 
+                                            ? "bg-primary-blue text-white" 
+                                            : "text-gray-400 hover:text-white hover:bg-white/5"
+                                    )}
+                                >
+                                    Comentarios ({comentarios.length})
+                                </button>
+                            </div>
+
                             <div className="p-8 overflow-auto flex-1 space-y-6">
-                                {eventos.map((ev) => (
-                                    <div key={ev.id} className="relative pl-8 border-l-2 border-primary-blue/30 pb-6 last:pb-0">
-                                        <div className="absolute top-0 -left-[9px] h-4 w-4 rounded-full bg-primary-blue border-4 border-black" />
-                                        <div className="flex justify-between items-start mb-2">
-                                            <p className="text-xs font-black text-primary-blue uppercase tracking-widest">
-                                                {ev.horaEvento ? format((ev.horaEvento as any).toDate(), 'HH:mm:ss') : 'Reciente'}
-                                            </p>
-                                            <span className="text-[10px] font-bold text-gray-500 bg-white/5 px-2 py-1 rounded-lg">
-                                                {ev.clasificacion}
-                                            </span>
-                                        </div>
-                                        <p className="text-lg font-black text-gray-100 mb-1">{ev.evento}</p>
-                                        {ev.justificacion && (
-                                            <div className="bg-white/5 p-4 rounded-2xl border border-white/5 mt-3">
-                                                <p className="text-sm text-gray-400 italic font-medium leading-relaxed">"{ev.justificacion}"</p>
+                                {eventsModalTab === 'eventos' ? (
+                                    eventos.map((ev) => (
+                                        <div key={ev.id} className="relative pl-8 border-l-2 border-primary-blue/30 pb-6 last:pb-0">
+                                            <div className="absolute top-0 -left-[9px] h-4 w-4 rounded-full bg-primary-blue border-4 border-black" />
+                                            <div className="flex justify-between items-start mb-2">
+                                                <p className="text-xs font-black text-primary-blue uppercase tracking-widest">
+                                                    {ev.horaEvento ? format((ev.horaEvento as any).toDate(), 'HH:mm:ss') : 'Reciente'}
+                                                </p>
+                                                <span className="text-[10px] font-bold text-gray-500 bg-white/5 px-2 py-1 rounded-lg">
+                                                    {ev.clasificacion}
+                                                </span>
                                             </div>
-                                        )}
-                                        <p className="text-[10px] text-gray-600 font-bold mt-4 uppercase tracking-tighter">Registrado por: {ev.registradoPorUsuario}</p>
-                                    </div>
-                                ))}
+                                            <p className="text-lg font-black text-gray-100 mb-1">{ev.evento}</p>
+                                            {ev.justificacion && (
+                                                <div className="bg-white/5 p-4 rounded-2xl border border-white/5 mt-3">
+                                                    <p className="text-sm text-gray-400 italic font-medium leading-relaxed">"{ev.justificacion}"</p>
+                                                </div>
+                                            )}
+                                            <p className="text-[10px] text-gray-600 font-bold mt-4 uppercase tracking-tighter">Registrado por: {ev.registradoPorUsuario}</p>
+                                        </div>
+                                    ))
+                                ) : (
+                                    comentarios.length === 0 ? (
+                                        <div className="text-center py-10 text-gray-500 font-bold uppercase tracking-wider">
+                                            No hay observaciones registradas en este proceso.
+                                        </div>
+                                    ) : (
+                                        comentarios.map((com) => (
+                                            <div key={com.id} className="relative pl-8 border-l-2 border-primary-blue/30 pb-6 last:pb-0">
+                                                <div className="absolute top-0 -left-[9px] h-4 w-4 rounded-full bg-primary-blue border-4 border-black" />
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <p className="text-xs font-black text-primary-blue uppercase tracking-widest">
+                                                        {com.creadoEn ? format((com.creadoEn as any).toDate(), 'HH:mm:ss') : 'Reciente'}
+                                                    </p>
+                                                    <span className="text-[10px] font-bold text-gray-500 bg-white/5 px-2 py-1 rounded-lg">
+                                                        OBSERVACIÓN
+                                                    </span>
+                                                </div>
+                                                <p className="text-lg font-black text-gray-100 mb-1 leading-relaxed">"{com.comentario}"</p>
+                                                <p className="text-[10px] text-gray-600 font-bold mt-4 uppercase tracking-tighter">Por: {com.nombreColaborador} (ID: {com.colaboradorId})</p>
+                                            </div>
+                                        ))
+                                    )
+                                )}
                             </div>
                         </div>
                     </div>

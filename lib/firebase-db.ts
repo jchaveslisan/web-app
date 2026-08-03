@@ -37,7 +37,7 @@ export {
 };
 import { db } from './firebase';
 export { db };
-import { Proceso, ColaboradorLog, EventoLog, User, ColaboradorMaestro, Justificacion, Etapa, OrdenMaestra } from '@/types';
+import { Proceso, ColaboradorLog, EventoLog, User, ColaboradorMaestro, Justificacion, Etapa, OrdenMaestra, Comentario } from '@/types';
 
 // --- USUARIOS ---
 export const getUsuario = async (uid: string): Promise<User | null> => {
@@ -487,4 +487,49 @@ export const deleteOrdenMaestra = async (id: string) => {
         activo: false
     });
 };
+
+// --- COMENTARIOS ---
+export const addComentario = async (comentario: Omit<Comentario, 'id' | 'creadoEn'>) => {
+    return await addDoc(collection(db, 'comentarios'), {
+        ...comentario,
+        creadoEn: serverTimestamp()
+    });
+};
+
+export const subscribeComentarios = (procesoId: string, callback: (comentarios: Comentario[]) => void) => {
+    const q = query(
+        collection(db, 'comentarios'),
+        where('procesoId', '==', procesoId)
+    );
+    return onSnapshot(q, (snapshot) => {
+        const comentarios = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as Comentario))
+            .sort((a, b) => {
+                const timeA = a.creadoEn?.toMillis?.() || 0;
+                const timeB = b.creadoEn?.toMillis?.() || 0;
+                return timeA - timeB; // Cronológico ascendente
+            });
+        callback(comentarios);
+    });
+};
+
+export const getComentariosByOP = async (op: string): Promise<Comentario[]> => {
+    const q = query(
+        collection(db, 'comentarios'),
+        where('ordenProduccion', '==', op)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Comentario))
+        .sort((a, b) => {
+            const timeA = a.creadoEn?.toMillis?.() || 0;
+            const timeB = b.creadoEn?.toMillis?.() || 0;
+            return timeA - timeB; // Cronológico ascendente
+        });
+};
+
+export const deleteComentario = async (id: string): Promise<void> => {
+    await deleteDoc(doc(db, 'comentarios', id));
+};
+
 

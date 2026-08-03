@@ -19,16 +19,23 @@ import {
     Key,
     ClipboardList,
     FileText,
-    RefreshCw
+    RefreshCw,
+    TrendingUp,
+    Clock,
+    BarChart3,
+    MessageSquare,
+    ShieldCheck,
+    AlertTriangle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/auth-service';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { getComentariosByOP, deleteComentario } from '@/lib/firebase-db';
 import { ColaboradorMaestro, Justificacion, Etapa, User, UserRole, OrdenMaestra } from '@/types';
 
 export default function AdminPage() {
-    const [tab, setTab] = useState<'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios' | 'ordenes' | 'reportes'>('personal');
+    const [tab, setTab] = useState<'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios' | 'ordenes' | 'reportes' | 'resumen'>('personal');
     const [colaboradores, setColaboradores] = useState<ColaboradorMaestro[]>([]);
     const [justificacionesPausa, setJustificacionesPausa] = useState<Justificacion[]>([]);
     const [justificacionesSalida, setJustificacionesSalida] = useState<Justificacion[]>([]);
@@ -39,6 +46,11 @@ export default function AdminPage() {
     const [selectedRepoOP, setSelectedRepoOP] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [selectedResumenOP, setSelectedResumenOP] = useState('');
+    const [resumenComentarios, setResumenComentarios] = useState<any[]>([]);
+    const [resumenLogs, setResumenLogs] = useState<any[]>([]);
+    const [resumenEvents, setResumenEvents] = useState<any[]>([]);
+    const [loadingResumenDetails, setLoadingResumenDetails] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [newNombre, setNewNombre] = useState('');
     const [newID, setNewID] = useState('');
@@ -195,6 +207,67 @@ export default function AdminPage() {
         });
         return () => unsubscribe();
     }, []);
+
+    // Suscribirse a comentarios de la OP seleccionada para resumen
+    useEffect(() => {
+        if (!selectedResumenOP) {
+            setResumenComentarios([]);
+            return;
+        }
+        const q = query(
+            collection(db, 'comentarios'),
+            where('ordenProduccion', '==', selectedResumenOP)
+        );
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const coms = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+            coms.sort((a, b) => {
+                const timeA = a.creadoEn?.toMillis?.() || a.creadoEn?.seconds * 1000 || 0;
+                const timeB = b.creadoEn?.toMillis?.() || b.creadoEn?.seconds * 1000 || 0;
+                return timeA - timeB;
+            });
+            setResumenComentarios(coms);
+        });
+        return () => unsubscribe();
+    }, [selectedResumenOP]);
+
+    // Cargar logs y eventos en cascada de la OP seleccionada para resumen
+    useEffect(() => {
+        if (!selectedResumenOP) {
+            setResumenLogs([]);
+            setResumenEvents([]);
+            return;
+        }
+
+        const fetchDetails = async () => {
+            setLoadingResumenDetails(true);
+            try {
+                const procesosOP = allProcesos.filter(p => p.ordenProduccion === selectedResumenOP);
+                const allLogs: any[] = [];
+                const allEvents: any[] = [];
+
+                for (const proceso of procesosOP) {
+                    const qLogs = query(collection(db, 'colaboradores_log'), where('procesoId', '==', proceso.id));
+                    const snapLogs = await getDocs(qLogs);
+                    const logs = snapLogs.docs.map(d => ({ id: d.id, ...d.data(), etapa: proceso.etapa }));
+                    allLogs.push(...logs);
+
+                    const qEvents = query(collection(db, 'eventos_log'), where('procesoId', '==', proceso.id));
+                    const snapEvents = await getDocs(qEvents);
+                    const events = snapEvents.docs.map(d => ({ id: d.id, ...d.data(), etapa: proceso.etapa }));
+                    allEvents.push(...events);
+                }
+
+                setResumenLogs(allLogs);
+                setResumenEvents(allEvents);
+            } catch (err) {
+                console.error("Error al cargar detalles de resumen:", err);
+            } finally {
+                setLoadingResumenDetails(false);
+            }
+        };
+
+        fetchDetails();
+    }, [selectedResumenOP, allProcesos]);
 
     const generatePDF = async () => {
         if (!selectedRepoOP) return;
@@ -410,6 +483,26 @@ export default function AdminPage() {
                 styles: { fontSize: 8 },
                 headStyles: { fillColor: [15, 23, 42] }
             });
+
+            // 6. OBSERVACIONES Y COMENTARIOS
+            const coms = await getComentariosByOP(selectedRepoOP);
+            if (coms.length > 0) {
+                doc.addPage();
+                doc.setFontSize(16);
+                doc.text('OBSERVACIONES Y COMENTARIOS REGISTRADOS', 20, 20);
+                autoTable(doc, {
+                    startY: 30,
+                    head: [['Hora', 'Etapa', 'Colaborador', 'Observación / Comentario']],
+                    body: coms.map(com => [
+                        com.creadoEn ? format(com.creadoEn.toDate(), 'HH:mm:ss') : '-',
+                        com.etapa || '-',
+                        `${com.nombreColaborador} (${com.colaboradorId})`,
+                        com.comentario
+                    ]),
+                    styles: { fontSize: 8 },
+                    headStyles: { fillColor: [30, 41, 59] }
+                });
+            }
 
             doc.save(`Reporte_Integral_OP_${selectedRepoOP}.pdf`);
 
@@ -699,6 +792,17 @@ export default function AdminPage() {
                     )}
                 >
                     <FileText className="h-5 w-5" /> Reportes
+                </button>
+                <button
+                    onClick={() => { setTab('resumen'); setShowForm(false); }}
+                    className={cn(
+                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
+                        tab === 'resumen'
+                            ? "border-primary-blue text-primary-blue"
+                            : "border-transparent text-gray-400 hover:text-white"
+                    )}
+                >
+                    <BarChart3 className="h-5 w-5" /> Resumen de Producción
                 </button>
             </div>
 
@@ -1481,6 +1585,461 @@ export default function AdminPage() {
                                 </p>
                             )}
                         </div>
+                    </>
+                )}
+
+                {/* TAB: RESUMEN DE PRODUCCIÓN */}
+                {tab === 'resumen' && (
+                    <>
+                        <div className="mb-10 text-center animate-in fade-in duration-300">
+                            <h2 className="text-3xl font-black uppercase tracking-tight text-primary-blue mb-4">Resumen de Producción</h2>
+                            <p className="text-gray-400 font-medium text-sm">Visualización de tiempos, personal, eficiencia y observaciones consolidadas por OP</p>
+                        </div>
+
+                        {/* OP Selector */}
+                        <div className="glass p-8 rounded-3xl border border-white/10 shadow-2xl mb-8 flex flex-col items-center gap-6 max-w-2xl mx-auto">
+                            <div className="w-full space-y-4">
+                                <label className="block text-xs font-black uppercase tracking-[0.2em] text-gray-500 text-center mb-2">Orden de Producción (OP)</label>
+                                <select
+                                    value={selectedResumenOP}
+                                    onChange={(e) => setSelectedResumenOP(e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-3xl p-6 text-xl font-black text-center outline-none focus:ring-4 focus:ring-primary-blue/20 transition-all appearance-none cursor-pointer"
+                                >
+                                    <option value="" className="bg-black">-- Seleccione OP --</option>
+                                    {Array.from(new Set(allProcesos.map(p => p.ordenProduccion)))
+                                        .filter(op => op !== 'N/A')
+                                        .sort()
+                                        .map(op => (
+                                            <option key={op} value={op} className="bg-black">{op}</option>
+                                        ))
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* If OP is selected, show details */}
+                        {selectedResumenOP && (
+                            loadingResumenDetails ? (
+                                <div className="p-20 text-center font-black animate-pulse text-gray-600 uppercase tracking-widest">
+                                    Cargando información del resumen...
+                                </div>
+                            ) : (() => {
+                                const procesosOP = allProcesos.filter(p => p.ordenProduccion === selectedResumenOP);
+                                
+                                if (procesosOP.length === 0) {
+                                    return (
+                                        <div className="text-center py-20 text-gray-500 font-bold uppercase tracking-widest italic">
+                                            No hay procesos registrados para esta OP
+                                        </div>
+                                    );
+                                }
+
+                                const mainProceso = procesosOP[0];
+
+                                // Time Calculations
+                                const startTimes = procesosOP.map(p => p.horaInicioReal?.toMillis?.() || p.horaInicioReal?.seconds * 1000).filter(Boolean);
+                                const endTimes = procesosOP.map(p => p.horaFinReal?.toMillis?.() || p.horaFinReal?.seconds * 1000).filter(Boolean);
+                                
+                                const minStart = startTimes.length ? Math.min(...startTimes) : null;
+                                const maxEnd = endTimes.length ? Math.max(...endTimes) : null;
+                                const effectiveMaxEnd = maxEnd || Date.now();
+                                const totalOPSeconds = minStart ? Math.floor((effectiveMaxEnd - minStart) / 1000) : 0;
+                                
+                                const totalSetupSeconds = procesosOP.reduce((sum, p) => sum + (p.tiempoSetupSegundos || 0), 0);
+                                const totalReprocesoSeconds = procesosOP.reduce((sum, p) => sum + (p.tiempoReprocesoSegundos || 0), 0);
+                                
+                                // Pause calculations
+                                let totalPauseSeconds = 0;
+                                const sortedEvents = [...resumenEvents].sort((a, b) => {
+                                    const timeA = a.horaEvento?.toMillis?.() || a.horaEvento?.seconds * 1000 || 0;
+                                    const timeB = b.horaEvento?.toMillis?.() || b.horaEvento?.seconds * 1000 || 0;
+                                    return timeA - timeB;
+                                });
+                                
+                                let pauseStartMap: Record<string, number> = {};
+                                sortedEvents.forEach(evt => {
+                                    const eventText = (evt.evento || "").toUpperCase();
+                                    const processId = evt.procesoId;
+                                    const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                                    
+                                    if (eventText.includes('PAUSA')) {
+                                        pauseStartMap[processId] = timeMs;
+                                    } else if (eventText.includes('REANUDA') && pauseStartMap[processId]) {
+                                        totalPauseSeconds += Math.floor((timeMs - pauseStartMap[processId]) / 1000);
+                                        delete pauseStartMap[processId];
+                                    }
+                                });
+                                // Add ongoing pauses if process is active and paused
+                                Object.keys(pauseStartMap).forEach(procId => {
+                                    const relatedProc = procesosOP.find(p => p.id === procId);
+                                    if (relatedProc && relatedProc.estado === 'Pausado') {
+                                        totalPauseSeconds += Math.floor((Date.now() - pauseStartMap[procId]) / 1000);
+                                    }
+                                });
+
+                                // Quality calculations
+                                let totalQualityWaitingSeconds = 0;
+                                let totalQualityInspectionSeconds = 0;
+                                
+                                procesosOP.forEach(p => {
+                                    const call = p.calidadLlamadaEn?.toMillis?.() || p.calidadLlamadaEn?.seconds * 1000 || 0;
+                                    const arrival = p.calidadLlegadaEn?.toMillis?.() || p.calidadLlegadaEn?.seconds * 1000 || 0;
+                                    const approval = p.calidadAprobadaEn?.toMillis?.() || p.calidadAprobadaEn?.seconds * 1000 || 0;
+                                    
+                                    if (call > 0 && arrival > 0) {
+                                        totalQualityWaitingSeconds += Math.floor((arrival - call) / 1000);
+                                    } else if (call > 0 && p.calidadEstado === 'esperando') {
+                                        totalQualityWaitingSeconds += Math.floor((Date.now() - call) / 1000);
+                                    }
+                                    
+                                    if (arrival > 0 && approval > 0) {
+                                        totalQualityInspectionSeconds += Math.floor((approval - arrival) / 1000);
+                                    } else if (arrival > 0 && p.calidadEstado === 'inspeccion') {
+                                        totalQualityInspectionSeconds += Math.floor((Date.now() - arrival) / 1000);
+                                    }
+                                });
+
+                                // Helper to format duration
+                                const formatDuration = (seconds: number) => {
+                                    if (seconds < 0) return '0s';
+                                    const h = Math.floor(seconds / 3600);
+                                    const m = Math.floor((seconds % 3600) / 60);
+                                    const s = Math.floor(seconds % 60);
+                                    return `${h}h ${m}m ${s}s`;
+                                };
+
+                                return (
+                                    <div className="space-y-8 animate-in fade-in duration-500">
+                                        
+                                        {/* OP Info Header Card */}
+                                        <div className="glass p-6 rounded-3xl border border-white/10 flex flex-col md:flex-row justify-between gap-4 bg-white/5">
+                                            <div>
+                                                <p className="text-xs font-black text-gray-500 uppercase tracking-widest">Orden de Producción</p>
+                                                <h3 className="text-2xl font-black text-white uppercase">{selectedResumenOP}</h3>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-black text-gray-500 uppercase tracking-widest">Producto</p>
+                                                <h4 className="text-lg font-bold text-gray-200 uppercase">{mainProceso.producto || 'N/A'}</h4>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-black text-gray-500 uppercase tracking-widest">Lote</p>
+                                                <h4 className="text-lg font-bold text-gray-200 uppercase font-mono">{mainProceso.lote || 'N/A'}</h4>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-black text-gray-500 uppercase tracking-widest">Líder del Proceso</p>
+                                                <h4 className="text-lg font-bold text-primary-blue uppercase">{mainProceso.lider || 'N/A'}</h4>
+                                            </div>
+                                        </div>
+
+                                        {/* Executive Cards Grid */}
+                                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                                            
+                                            {/* Duración Total */}
+                                            <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[120px] bg-gradient-to-br from-white/5 to-transparent">
+                                                <div className="flex justify-between items-start text-gray-400">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">TIEMPO TOTAL OP</span>
+                                                    <Clock className="h-5 w-5 text-primary-blue" />
+                                                </div>
+                                                <div className="mt-3">
+                                                    <h3 className="text-xl font-black text-white tracking-tight">{formatDuration(totalOPSeconds)}</h3>
+                                                    <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Desde primer inicio</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Setup */}
+                                            <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[120px] bg-gradient-to-br from-white/5 to-transparent">
+                                                <div className="flex justify-between items-start text-gray-400">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">TIEMPO SETUP</span>
+                                                    <Settings className="h-5 w-5 text-accent-purple" />
+                                                </div>
+                                                <div className="mt-3">
+                                                    <h3 className="text-xl font-black text-white tracking-tight">{formatDuration(totalSetupSeconds)}</h3>
+                                                    <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Configuración inicial</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Reproceso */}
+                                            <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[120px] bg-gradient-to-br from-white/5 to-transparent">
+                                                <div className="flex justify-between items-start text-gray-400">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">REPROCESO</span>
+                                                    <AlertTriangle className="h-5 w-5 text-danger-red" />
+                                                </div>
+                                                <div className="mt-3">
+                                                    <h3 className="text-xl font-black text-white tracking-tight">{formatDuration(totalReprocesoSeconds)}</h3>
+                                                    <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Re-trabajo en línea</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Pausas */}
+                                            <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[120px] bg-gradient-to-br from-white/5 to-transparent">
+                                                <div className="flex justify-between items-start text-gray-400">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">TIEMPO PAUSAS</span>
+                                                    <Pause className="h-5 w-5 text-warning-yellow" />
+                                                </div>
+                                                <div className="mt-3">
+                                                    <h3 className="text-xl font-black text-white tracking-tight">{formatDuration(totalPauseSeconds)}</h3>
+                                                    <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Retrasos e interrupciones</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Calidad Detalle */}
+                                            <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[120px] bg-gradient-to-br from-white/5 to-transparent col-span-1">
+                                                <div className="flex justify-between items-start text-gray-400 mb-1">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">TIEMPOS CALIDAD</span>
+                                                    <ShieldCheck className="h-5 w-5 text-success-green" />
+                                                </div>
+                                                <div className="space-y-1 mt-1 text-[11px] font-bold">
+                                                    <div className="flex justify-between text-gray-400">
+                                                        <span>ESPERA:</span>
+                                                        <span className="text-white font-mono">{formatDuration(totalQualityWaitingSeconds)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-gray-400">
+                                                        <span>APROBACIÓN:</span>
+                                                        <span className="text-white font-mono">{formatDuration(totalQualityInspectionSeconds)}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                        </div>
+
+                                        {/* Comentarios de la OP */}
+                                        <div className="glass p-6 rounded-3xl border border-white/10 bg-white/5">
+                                            <h3 className="text-lg font-black uppercase text-primary-blue mb-4 flex items-center gap-2">
+                                                <MessageSquare className="h-5 w-5" /> OBSERVACIONES Y COMENTARIOS REGISTRADOS
+                                            </h3>
+                                            {resumenComentarios.length === 0 ? (
+                                                <p className="text-sm text-gray-500 italic text-center py-6">No hay comentarios u observaciones registrados para esta orden.</p>
+                                            ) : (
+                                                <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                                                    {resumenComentarios.map(com => (
+                                                        <div key={com.id} className="flex justify-between items-start border-b border-white/5 py-4 last:border-0 hover:bg-white/[0.02] px-3 rounded-2xl transition-all">
+                                                            <div>
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="text-[9px] font-black text-primary-blue bg-primary-blue/15 px-2 py-0.5 rounded-lg border border-primary-blue/20 uppercase tracking-widest">{com.etapa}</span>
+                                                                    <span className="text-[10px] font-bold text-gray-500 font-mono">
+                                                                        {com.creadoEn ? format((com.creadoEn as any).toDate(), 'dd/MM/yyyy HH:mm:ss') : 'Reciente'}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-sm text-gray-200 font-medium leading-relaxed italic">"{com.comentario}"</p>
+                                                                <p className="text-[10px] text-gray-600 font-bold uppercase mt-1 tracking-tighter">Registrado por: {com.nombreColaborador} (PIN/ID: {com.colaboradorId})</p>
+                                                            </div>
+                                                            <button
+                                                                onClick={async () => {
+                                                                    if (confirm('¿Eliminar esta observación permanentemente?')) {
+                                                                        try {
+                                                                            await deleteComentario(com.id);
+                                                                        } catch (e) {
+                                                                            console.error(e);
+                                                                            alert('Error al eliminar observación.');
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                className="p-2 hover:bg-danger-red/10 text-danger-red rounded-xl transition-all ml-4 shrink-0"
+                                                                title="Eliminar comentario"
+                                                            >
+                                                                <Trash2 className="h-5 w-5" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Detalle por Etapas */}
+                                        <div className="space-y-6">
+                                            <h3 className="text-xl font-black uppercase tracking-tight text-white">Desglose por Etapa</h3>
+                                            
+                                            {procesosOP.map(p => {
+                                                // Specific process values
+                                                const procLogs = resumenLogs.filter(l => l.procesoId === p.id);
+                                                
+                                                // Process pause seconds
+                                                let procPauseSeconds = 0;
+                                                let procPauseStart: number | null = null;
+                                                const procEvents = resumenEvents
+                                                    .filter(evt => evt.procesoId === p.id)
+                                                    .sort((a, b) => (a.horaEvento?.seconds || 0) - (b.horaEvento?.seconds || 0));
+                                                    
+                                                procEvents.forEach(evt => {
+                                                    const eventText = (evt.evento || "").toUpperCase();
+                                                    const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                                                    if (eventText.includes('PAUSA')) {
+                                                        procPauseStart = timeMs;
+                                                    } else if (eventText.includes('REANUDA') && procPauseStart) {
+                                                        procPauseSeconds += Math.floor((timeMs - procPauseStart) / 1000);
+                                                        procPauseStart = null;
+                                                    }
+                                                });
+                                                if (procPauseStart && p.estado === 'Pausado') {
+                                                    procPauseSeconds += Math.floor((Date.now() - procPauseStart) / 1000);
+                                                }
+
+                                                // Process quality times
+                                                const qCall = p.calidadLlamadaEn?.toMillis?.() || p.calidadLlamadaEn?.seconds * 1000 || 0;
+                                                const qArrival = p.calidadLlegadaEn?.toMillis?.() || p.calidadLlegadaEn?.seconds * 1000 || 0;
+                                                const qApproval = p.calidadAprobadaEn?.toMillis?.() || p.calidadAprobadaEn?.seconds * 1000 || 0;
+                                                
+                                                let procQualityWaiting = 0;
+                                                let procQualityInspection = 0;
+                                                if (qCall > 0 && qArrival > 0) procQualityWaiting = Math.floor((qArrival - qCall) / 1000);
+                                                else if (qCall > 0 && p.calidadEstado === 'esperando') procQualityWaiting = Math.floor((Date.now() - qCall) / 1000);
+                                                
+                                                if (qArrival > 0 && qApproval > 0) procQualityInspection = Math.floor((qApproval - qArrival) / 1000);
+                                                else if (qArrival > 0 && p.calidadEstado === 'inspeccion') procQualityInspection = Math.floor((Date.now() - qArrival) / 1000);
+
+                                                // Process progress and efficiency
+                                                const progressPercentage = p.cantidadProducir > 0 ? Math.min(100, (p.trabajoCompletado / p.cantidadProducir) * 100) : 0;
+                                                const efficiency = p.velocidadTeorica > 0 ? ((p.trabajoCompletado / (p.cantidadProducir || 1)) * 100) : 0;
+
+                                                return (
+                                                    <div key={p.id} className="glass p-6 rounded-3xl border border-white/10 space-y-6">
+                                                        
+                                                        {/* Stage Title and Status */}
+                                                        <div className="flex flex-wrap justify-between items-center gap-4 border-b border-white/5 pb-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="h-3 w-3 rounded-full bg-primary-blue animate-pulse" />
+                                                                <h4 className="text-lg font-black uppercase text-white tracking-wider">{p.etapa || 'SIN ETAPA'}</h4>
+                                                            </div>
+                                                            <div className="flex items-center gap-4">
+                                                                <span className={cn(
+                                                                    "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border",
+                                                                    p.estado === 'Finalizado' && "bg-success-green/10 border-success-green/20 text-success-green",
+                                                                    p.estado === 'Iniciado' && "bg-primary-blue/10 border-primary-blue/20 text-primary-blue animate-pulse",
+                                                                    p.estado === 'Pausado' && "bg-warning-yellow/10 border-warning-yellow/20 text-warning-yellow",
+                                                                    p.estado === 'Creado' && "bg-gray-500/10 border-gray-500/20 text-gray-400"
+                                                                )}>
+                                                                    {p.estado}
+                                                                </span>
+                                                                <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">
+                                                                    Líder: <strong className="text-gray-300">{p.lider || 'N/A'}</strong>
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Stage Details Grid */}
+                                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                                            
+                                                            {/* Progress and quantities */}
+                                                            <div className="space-y-2">
+                                                                <div className="flex justify-between text-xs font-black uppercase tracking-widest text-gray-500">
+                                                                    <span>PROGRESO DE PRODUCCIÓN</span>
+                                                                    <span className="text-white">{progressPercentage.toFixed(1)}%</span>
+                                                                </div>
+                                                                <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden border border-white/5">
+                                                                    <div 
+                                                                        className="bg-primary-blue h-full rounded-full transition-all duration-500"
+                                                                        style={{ width: `${progressPercentage}%` }}
+                                                                    />
+                                                                </div>
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase">
+                                                                    Completado: <span className="font-mono text-white">{p.trabajoCompletado}</span> / <span className="font-mono text-white">{p.cantidadProducir}</span> uds
+                                                                </p>
+                                                            </div>
+
+                                                            {/* Efficiency */}
+                                                            <div className="space-y-1">
+                                                                <p className="text-xs font-black uppercase tracking-widest text-gray-500">EFICIENCIA DEL PROCESO</p>
+                                                                <h3 className="text-2xl font-black text-success-green">{efficiency.toFixed(1)}%</h3>
+                                                                <p className="text-[9px] font-bold text-gray-400 uppercase">Basada en velocidad teórica</p>
+                                                            </div>
+
+                                                            {/* Production Times Breakdown */}
+                                                            <div className="space-y-1 text-xs">
+                                                                <p className="font-black uppercase tracking-widest text-gray-500 mb-1">Tiempos Productivos</p>
+                                                                <div className="flex justify-between font-bold text-gray-400">
+                                                                    <span>SETUP:</span>
+                                                                    <span className="text-white font-mono">{formatDuration(p.tiempoSetupSegundos || 0)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between font-bold text-gray-400">
+                                                                    <span>REPROCESO:</span>
+                                                                    <span className="text-white font-mono">{formatDuration(p.tiempoReprocesoSegundos || 0)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between font-bold text-gray-400">
+                                                                    <span>PAUSAS:</span>
+                                                                    <span className="text-white font-mono">{formatDuration(procPauseSeconds)}</span>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Quality Times Breakdown */}
+                                                            <div className="space-y-1 text-xs">
+                                                                <p className="font-black uppercase tracking-widest text-gray-500 mb-1">Tiempos de Calidad</p>
+                                                                <div className="flex justify-between font-bold text-gray-400">
+                                                                    <span>ESPERA CALIDAD:</span>
+                                                                    <span className="text-white font-mono">{formatDuration(procQualityWaiting)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between font-bold text-gray-400">
+                                                                    <span>INSPECCIÓN:</span>
+                                                                    <span className="text-white font-mono">{formatDuration(procQualityInspection)}</span>
+                                                                </div>
+                                                            </div>
+
+                                                        </div>
+
+                                                        {/* Personnel logs for this stage */}
+                                                        <div className="space-y-3">
+                                                            <p className="text-xs font-black uppercase tracking-widest text-gray-500">Historial de Personal en esta Etapa</p>
+                                                            {procLogs.length === 0 ? (
+                                                                <p className="text-xs text-gray-500 italic py-2">No hay registros de ingreso de personal para esta etapa.</p>
+                                                            ) : (
+                                                                <div className="glass rounded-2xl overflow-hidden border border-white/5 bg-black/20">
+                                                                    <table className="w-full text-left text-xs">
+                                                                        <thead>
+                                                                            <tr className="bg-white/5 border-b border-white/5 text-[9px] font-black uppercase text-gray-500 tracking-wider">
+                                                                                <th className="p-3">Colaborador</th>
+                                                                                <th className="p-3">Tipo Registro</th>
+                                                                                <th className="p-3">Ingreso</th>
+                                                                                <th className="p-3">Salida</th>
+                                                                                <th className="p-3 text-right">Duración Trabajada</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody className="divide-y divide-white/5 text-gray-300 font-medium">
+                                                                            {procLogs.map(log => {
+                                                                                const entryDate = log.horaIngreso?.toDate?.() || (log.horaIngreso?.seconds ? new Date(log.horaIngreso.seconds * 1000) : null);
+                                                                                const exitDate = log.horaSalida?.toDate?.() || (log.horaSalida?.seconds ? new Date(log.horaSalida.seconds * 1000) : null);
+                                                                                
+                                                                                let durSec = 0;
+                                                                                if (entryDate && exitDate) {
+                                                                                    durSec = Math.floor((exitDate.getTime() - entryDate.getTime()) / 1000);
+                                                                                } else if (entryDate && p.estado === 'Iniciado') {
+                                                                                    durSec = Math.floor((Date.now() - entryDate.getTime()) / 1000);
+                                                                                }
+
+                                                                                return (
+                                                                                    <tr key={log.id} className="hover:bg-white/[0.01]">
+                                                                                        <td className="p-3 uppercase font-bold text-white">{log.nombre || log.nombreColaborador}</td>
+                                                                                        <td className="p-3">
+                                                                                            <span className={cn(
+                                                                                                "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border",
+                                                                                                log.tipo === 'setup' ? "bg-accent-purple/10 border-accent-purple/20 text-accent-purple" : "bg-primary-blue/10 border-primary-blue/20 text-primary-blue"
+                                                                                            )}>
+                                                                                                {log.tipo || 'colaborador'}
+                                                                                            </span>
+                                                                                        </td>
+                                                                                        <td className="p-3 font-mono">{entryDate ? format(entryDate, 'HH:mm:ss') : '-'}</td>
+                                                                                        <td className="p-3 font-mono">
+                                                                                            {exitDate ? format(exitDate, 'HH:mm:ss') : (log.horaSalida === null ? <span className="text-success-green animate-pulse">ACTIVO</span> : '-')}
+                                                                                        </td>
+                                                                                        <td className="p-3 text-right font-mono font-bold text-white">
+                                                                                            {durSec > 0 ? formatDuration(durSec) : '-'}
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                );
+                                                                            })}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
+                                    </div>
+                                );
+                            })()
+                        )}
                     </>
                 )}
             </div>

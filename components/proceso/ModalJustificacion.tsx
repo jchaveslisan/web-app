@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 
 interface Props {
     tipo: 'pausa' | 'salida';
-    onConfirm: (justificacion: string) => void;
+    onConfirm: (justificacion: string) => void | Promise<void>;
     onCancel: () => void;
 }
 
