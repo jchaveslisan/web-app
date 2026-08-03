@@ -36,7 +36,19 @@ import { getComentariosByOP, deleteComentario } from '@/lib/firebase-db';
 import { ColaboradorMaestro, Justificacion, Etapa, User, UserRole, OrdenMaestra } from '@/types';
 
 export default function AdminPage() {
-    const [tab, setTab] = useState<'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios' | 'ordenes' | 'reportes' | 'resumen' | 'articulos'>('personal');
+    const [tab, setTab] = useState<'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios' | 'ordenes' | 'reportes' | 'resumen' | 'articulos' | 'reporteFechas'>('personal');
+    
+    // Date Range Report States
+    const [reportStartDate, setReportStartDate] = useState('');
+    const [reportEndDate, setReportEndDate] = useState('');
+    const [isGeneratingRangeReport, setIsGeneratingRangeReport] = useState(false);
+    const [rangeReportData, setRangeReportData] = useState<{
+        processes: any[];
+        logs: any[];
+        events: any[];
+        comments: any[];
+    } | null>(null);
+
     const [colaboradores, setColaboradores] = useState<ColaboradorMaestro[]>([]);
     const [newCedula, setNewCedula] = useState('');
 
@@ -537,6 +549,265 @@ export default function AdminPage() {
         }
     };
 
+    const setQuickRange = (preset: 'this-week' | 'last-week' | 'this-month' | 'last-month') => {
+        const now = new Date();
+        const start = new Date(now);
+        const end = new Date(now);
+
+        if (preset === 'this-week') {
+            const day = now.getDay();
+            const diffToMonday = now.getDate() - day + (day === 0 ? -6 : 1);
+            start.setDate(diffToMonday);
+            end.setDate(diffToMonday + 6);
+        } else if (preset === 'last-week') {
+            const day = now.getDay();
+            const diffToMonday = now.getDate() - day + (day === 0 ? -6 : 1) - 7;
+            start.setDate(diffToMonday);
+            end.setDate(diffToMonday + 6);
+        } else if (preset === 'this-month') {
+            start.setDate(1);
+            end.setMonth(now.getMonth() + 1);
+            end.setDate(0);
+        } else if (preset === 'last-month') {
+            start.setMonth(now.getMonth() - 1);
+            start.setDate(1);
+            end.setMonth(now.getMonth());
+            end.setDate(0);
+        }
+
+        const formatDateString = (d: Date) => {
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        };
+
+        setReportStartDate(formatDateString(start));
+        setReportEndDate(formatDateString(end));
+    };
+
+    const handleGenerateRangeReport = async () => {
+        if (!reportStartDate || !reportEndDate) {
+            alert("Por favor seleccione un rango de fechas.");
+            return;
+        }
+        setIsGeneratingRangeReport(true);
+        try {
+            const startMs = new Date(`${reportStartDate}T00:00:00`).getTime();
+            const endMs = new Date(`${reportEndDate}T23:59:59.999`).getTime();
+
+            const procesosInRange = allProcesos.filter(p => {
+                const timeMs = p.creadoEn?.toMillis?.() || p.creadoEn?.seconds * 1000 || 0;
+                return timeMs >= startMs && timeMs <= endMs;
+            });
+
+            if (procesosInRange.length === 0) {
+                setRangeReportData({ processes: [], logs: [], events: [], comments: [] });
+                setIsGeneratingRangeReport(false);
+                return;
+            }
+
+            const logsPromises = procesosInRange.map(p => 
+                getDocs(query(collection(db, 'colaboradores_log'), where('procesoId', '==', p.id)))
+            );
+            const eventsPromises = procesosInRange.map(p => 
+                getDocs(query(collection(db, 'eventos_log'), where('procesoId', '==', p.id)))
+            );
+            const commentsPromises = procesosInRange.map(p => 
+                getDocs(query(collection(db, 'comentarios'), where('procesoId', '==', p.id)))
+            );
+
+            const logsSnaps = await Promise.all(logsPromises);
+            const eventsSnaps = await Promise.all(eventsPromises);
+            const commentsSnaps = await Promise.all(commentsPromises);
+
+            const logs: any[] = [];
+            logsSnaps.forEach((snap, idx) => {
+                const proc = procesosInRange[idx];
+                snap.docs.forEach(doc => {
+                    logs.push({ id: doc.id, ...doc.data(), etapa: proc.etapa, op: proc.ordenProduccion, producto: proc.producto });
+                });
+            });
+
+            const events: any[] = [];
+            eventsSnaps.forEach((snap, idx) => {
+                const proc = procesosInRange[idx];
+                snap.docs.forEach(doc => {
+                    events.push({ id: doc.id, ...doc.data(), etapa: proc.etapa, op: proc.ordenProduccion, producto: proc.producto });
+                });
+            });
+
+            const comments: any[] = [];
+            commentsSnaps.forEach((snap, idx) => {
+                const proc = procesosInRange[idx];
+                snap.docs.forEach(doc => {
+                    comments.push({ id: doc.id, ...doc.data(), etapa: proc.etapa, op: proc.ordenProduccion, producto: proc.producto });
+                });
+            });
+
+            setRangeReportData({
+                processes: procesosInRange,
+                logs,
+                events,
+                comments
+            });
+        } catch (err) {
+            console.error("Error al generar reporte de rango de fechas:", err);
+            alert("Ocurrió un error al consultar los datos.");
+        } finally {
+            setIsGeneratingRangeReport(false);
+        }
+    };
+
+    const generateRangeReportPDF = async (stats: any) => {
+        if (!rangeReportData || !stats) return;
+        setIsGeneratingRangeReport(true);
+        try {
+            const doc = new jsPDF();
+            
+            doc.setFillColor(15, 23, 42);
+            doc.rect(0, 0, 210, 40, 'F');
+            doc.setFontSize(22);
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.text('REPORTE CONSOLIDADO DE PLANTA', 105, 20, { align: 'center' });
+            
+            doc.setFontSize(10);
+            doc.setTextColor(200, 200, 200);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`PERIODO: ${reportStartDate} AL ${reportEndDate} | GENERADO: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 105, 30, { align: 'center' });
+            
+            doc.setFontSize(16);
+            doc.setTextColor(15, 23, 42);
+            doc.setFont('helvetica', 'bold');
+            doc.text('RESUMEN EJECUTIVO DE PRODUCTIVIDAD', 20, 55);
+            
+            const formatDuration = (sec: number) => {
+                const h = Math.floor(sec / 3600);
+                const m = Math.floor((sec % 3600) / 60);
+                return `${h}h ${m}m`;
+            };
+
+            autoTable(doc, {
+                startY: 65,
+                head: [['Métrica', 'Valor Consolidado']],
+                body: [
+                    ['Órdenes de Producción Procesadas', `${stats.totalOPs} OP(s)`],
+                    ['Volumen Total Producido', `${stats.totalUnitsProduced.toLocaleString()} Uds`],
+                    ['Horas-Hombre Laboradas (Directas/Setup)', formatDuration(stats.totalProductiveSeconds)],
+                    ['Tiempo Total en Pausa', formatDuration(stats.totalPauseSeconds)],
+                    ['Tiempo Total de Setup de Máquinas', formatDuration(stats.totalSetupSeconds)],
+                    ['Tiempo Total en Reproceso', formatDuration(stats.totalReprocesoSeconds)],
+                    ['Tiempo de Espera por Calidad', formatDuration(stats.totalQualityWaitingSeconds)],
+                    ['Tiempo de Inspección de Calidad', formatDuration(stats.totalQualityInspectionSeconds)],
+                ],
+                styles: { fontSize: 10 },
+                headStyles: { fillColor: [15, 23, 42] }
+            });
+
+            doc.addPage();
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text('ANÁLISIS DE TIEMPOS NO PRODUCTIVOS (PAUSAS)', 20, 20);
+
+            const pausesBody = Object.entries(stats.pauseReasons).map(([reason, data]: [string, any]) => [
+                reason,
+                `${data.count} vez/veces`,
+                formatDuration(data.duration)
+            ]);
+
+            autoTable(doc, {
+                startY: 30,
+                head: [['Motivo de la Pausa', 'Frecuencia de Uso', 'Duración Consolidada']],
+                body: pausesBody.length ? pausesBody : [['Sin pausas registradas', '-', '-']],
+                styles: { fontSize: 9 },
+                headStyles: { fillColor: [180, 83, 9] }
+            });
+
+            const currentY = (doc as any).lastAutoTable.finalY + 15;
+            doc.setFontSize(16);
+            doc.text('RESUMEN DE HORAS POR COLABORADOR', 20, currentY);
+
+            const operatorsBody = Object.entries(stats.operatorHours).map(([name, data]: [string, any]) => [
+                name,
+                data.type,
+                formatDuration(data.totalSeconds)
+            ]);
+
+            autoTable(doc, {
+                startY: currentY + 10,
+                head: [['Colaborador', 'Tipo de Ingreso', 'Tiempo Total Registrado']],
+                body: operatorsBody.length ? operatorsBody : [['No hay registros', '-', '-']],
+                styles: { fontSize: 9 },
+                headStyles: { fillColor: [30, 41, 59] }
+            });
+
+            doc.addPage();
+            doc.setFontSize(16);
+            doc.text('BITÁCORA DE MOVIMIENTOS DE PERSONAL', 20, 20);
+
+            const sortedLogs = [...rangeReportData.logs].sort((a,b) => {
+                const timeA = a.horaIngreso?.toMillis?.() || a.horaIngreso?.seconds * 1000 || 0;
+                const timeB = b.horaIngreso?.toMillis?.() || b.horaIngreso?.seconds * 1000 || 0;
+                return timeB - timeA;
+            });
+
+            const movementsBody = sortedLogs.map(log => {
+                const date = log.horaIngreso ? format(log.horaIngreso.toDate(), 'dd/MM/yyyy HH:mm:ss') : '-';
+                const exitDate = log.horaSalida ? format(log.horaSalida.toDate(), 'dd/MM/yyyy HH:mm:ss') : (log.horaSalida === null ? 'ACTIVO' : '-');
+                return [
+                    log.nombre || log.nombreColaborador,
+                    log.tipo || 'colaborador',
+                    `Ingresó: ${date}\nSalida: ${exitDate}`,
+                    log.etapa || 'N/A',
+                    log.op || 'N/A'
+                ];
+            });
+
+            autoTable(doc, {
+                startY: 30,
+                head: [['Colaborador', 'Tipo', 'Detalle de Tiempos', 'Etapa', 'OP']],
+                body: movementsBody.length ? movementsBody.slice(0, 100) : [['No hay registros en el rango', '-', '-', '-', '-']],
+                styles: { fontSize: 8 },
+                headStyles: { fillColor: [71, 85, 105] }
+            });
+
+            doc.addPage();
+            doc.setFontSize(16);
+            doc.text('OBSERVACIONES Y COMENTARIOS REGISTRADOS', 20, 20);
+
+            const sortedComments = [...rangeReportData.comments].sort((a,b) => {
+                const timeA = a.creadoEn?.toMillis?.() || a.creadoEn?.seconds * 1000 || 0;
+                const timeB = b.creadoEn?.toMillis?.() || b.creadoEn?.seconds * 1000 || 0;
+                return timeB - timeA;
+            });
+
+            const commentsBody = sortedComments.map(com => [
+                com.nombreColaborador || 'Desconocido',
+                com.creadoEn ? format(com.creadoEn.toDate(), 'dd/MM/yyyy HH:mm:ss') : '-',
+                com.etapa || 'N/A',
+                com.ordenProduccion || 'N/A',
+                com.comentario || ''
+            ]);
+
+            autoTable(doc, {
+                startY: 30,
+                head: [['Colaborador', 'Fecha y Hora', 'Etapa', 'OP', 'Observación / Comentario']],
+                body: commentsBody.length ? commentsBody.slice(0, 100) : [['No hay observaciones registradas', '-', '-', '-', '-']],
+                styles: { fontSize: 8 },
+                headStyles: { fillColor: [51, 65, 85] }
+            });
+
+            doc.save(`Reporte_Consolidado_Planta_${reportStartDate}_a_${reportEndDate}.pdf`);
+
+        } catch (error) {
+            console.error("Error al exportar PDF de rango de fechas:", error);
+            alert("Ocurrió un error al generar el archivo PDF.");
+        } finally {
+            setIsGeneratingRangeReport(false);
+        }
+    };
+
     const handleAddColaborador = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newNombre || !newCedula || !newID) {
@@ -889,6 +1160,17 @@ export default function AdminPage() {
                     )}
                 >
                     <BarChart3 className="h-5 w-5" /> Resumen de Producción
+                </button>
+                <button
+                    onClick={() => { setTab('reporteFechas'); setShowForm(false); }}
+                    className={cn(
+                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
+                        tab === 'reporteFechas'
+                            ? "border-accent-purple text-accent-purple"
+                            : "border-transparent text-gray-400 hover:text-white"
+                    )}
+                >
+                    <TrendingUp className="h-5 w-5" /> Reporte de Planta
                 </button>
                 <button
                     onClick={() => { setTab('articulos'); setShowForm(false); }}
@@ -2163,6 +2445,384 @@ export default function AdminPage() {
                                 );
                             })()
                         )}
+                    </>
+                )}
+
+                {/* TAB: REPORTE POR RANGO DE FECHAS */}
+                {tab === 'reporteFechas' && (
+                    <>
+                        <div className="mb-10 text-center animate-in fade-in duration-300">
+                            <h2 className="text-3xl font-black uppercase tracking-tight text-accent-purple mb-4">Reporte de Planta por Fechas</h2>
+                            <p className="text-gray-400 font-medium text-sm">Análisis consolidado de productividad, tiempos activos, pausas, esperas de calidad y colaboradores</p>
+                        </div>
+
+                        {/* Date Filters Card */}
+                        <div className="glass p-8 rounded-[2.5rem] border border-white/10 shadow-2xl mb-8 flex flex-col gap-6 max-w-3xl mx-auto bg-white/5">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+                                <div>
+                                    <label className="block text-xs font-black uppercase tracking-[0.2em] text-gray-500 mb-2">Fecha de Inicio</label>
+                                    <input
+                                        type="date"
+                                        value={reportStartDate}
+                                        onChange={(e) => setReportStartDate(e.target.value)}
+                                        className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-white font-bold outline-none focus:ring-2 focus:ring-accent-purple transition-all"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-black uppercase tracking-[0.2em] text-gray-500 mb-2">Fecha de Fin</label>
+                                    <input
+                                        type="date"
+                                        value={reportEndDate}
+                                        onChange={(e) => setReportEndDate(e.target.value)}
+                                        className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-white font-bold outline-none focus:ring-2 focus:ring-accent-purple transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Quick Presets */}
+                            <div className="flex flex-wrap gap-3 justify-center">
+                                <button
+                                    onClick={() => setQuickRange('this-week')}
+                                    className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-black uppercase tracking-wider text-gray-300 transition-all"
+                                >
+                                    Esta Semana
+                                </button>
+                                <button
+                                    onClick={() => setQuickRange('last-week')}
+                                    className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-black uppercase tracking-wider text-gray-300 transition-all"
+                                >
+                                    Semana Pasada
+                                </button>
+                                <button
+                                    onClick={() => setQuickRange('this-month')}
+                                    className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-black uppercase tracking-wider text-gray-300 transition-all"
+                                >
+                                    Este Mes
+                                </button>
+                                <button
+                                    onClick={() => setQuickRange('last-month')}
+                                    className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-black uppercase tracking-wider text-gray-300 transition-all"
+                                >
+                                    Mes Pasado
+                                </button>
+                            </div>
+
+                            {/* Submit Button */}
+                            <button
+                                onClick={handleGenerateRangeReport}
+                                disabled={isGeneratingRangeReport}
+                                className="w-full bg-accent-purple text-white py-4 rounded-2xl font-black text-lg hover:bg-purple-600 transition-all flex items-center justify-center gap-3 shadow-lg shadow-purple-500/20 disabled:opacity-50"
+                            >
+                                <RefreshCw className={cn("h-5 w-5", isGeneratingRangeReport && "animate-spin")} />
+                                {isGeneratingRangeReport ? "CONSULTANDO..." : "GENERAR CONSOLIDADO"}
+                            </button>
+                        </div>
+
+                        {/* Report Output Content */}
+                        {rangeReportData && (() => {
+                            const { processes, logs, events, comments } = rangeReportData;
+
+                            if (processes.length === 0) {
+                                return (
+                                    <div className="text-center py-20 text-gray-500 font-bold uppercase tracking-widest italic animate-in fade-in duration-300">
+                                        No se encontraron procesos registrados en este rango de fechas.
+                                    </div>
+                                );
+                            }
+
+                            // Calculate Consolidated Stats
+                            const totalOPs = new Set(processes.map(p => p.ordenProduccion).filter(op => op !== 'N/A')).size;
+                            const totalUnitsProduced = processes.reduce((sum, p) => sum + (p.trabajoCompletado || 0), 0);
+
+                            const totalSetupSeconds = processes.reduce((sum, p) => sum + (p.tiempoSetupSegundos || 0), 0);
+                            const totalReprocesoSeconds = processes.reduce((sum, p) => sum + (p.tiempoReprocesoSegundos || 0), 0);
+
+                            // Pauses grouped by reason
+                            let totalPauseSeconds = 0;
+                            const pauseReasons: Record<string, { count: number; duration: number }> = {};
+
+                            processes.forEach(p => {
+                                const pEvents = events.filter(e => e.procesoId === p.id).sort((a, b) => {
+                                    const timeA = a.horaEvento?.toMillis?.() || a.horaEvento?.seconds * 1000 || 0;
+                                    const timeB = b.horaEvento?.toMillis?.() || b.horaEvento?.seconds * 1000 || 0;
+                                    return timeA - timeB;
+                                });
+
+                                let pauseStart: number | null = null;
+                                let lastJustification = 'Sin justificar';
+
+                                pEvents.forEach(evt => {
+                                    const eventText = (evt.evento || "").toUpperCase();
+                                    const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+
+                                    if (eventText.includes('PAUSA')) {
+                                        pauseStart = timeMs;
+                                        lastJustification = evt.justificacion || 'Sin justificar';
+                                        if (!pauseReasons[lastJustification]) {
+                                            pauseReasons[lastJustification] = { count: 0, duration: 0 };
+                                        }
+                                        pauseReasons[lastJustification].count += 1;
+                                    } else if (eventText.includes('REANUDA') && pauseStart) {
+                                        const duration = Math.floor((timeMs - pauseStart) / 1000);
+                                        totalPauseSeconds += duration;
+                                        if (pauseReasons[lastJustification]) {
+                                            pauseReasons[lastJustification].duration += duration;
+                                        }
+                                        pauseStart = null;
+                                    }
+                                });
+
+                                if (pauseStart && p.estado === 'Pausado') {
+                                    const duration = Math.floor((Date.now() - pauseStart) / 1000);
+                                    totalPauseSeconds += duration;
+                                    if (pauseReasons[lastJustification]) {
+                                        pauseReasons[lastJustification].duration += duration;
+                                    }
+                                }
+                            });
+
+                            // Quality times
+                            let totalQualityWaitingSeconds = 0;
+                            let totalQualityInspectionSeconds = 0;
+                            
+                            processes.forEach(p => {
+                                const call = p.calidadLlamadaEn?.toMillis?.() || p.calidadLlamadaEn?.seconds * 1000 || 0;
+                                const arrival = p.calidadLlegadaEn?.toMillis?.() || p.calidadLlegadaEn?.seconds * 1000 || 0;
+                                const approval = p.calidadAprobadaEn?.toMillis?.() || p.calidadAprobadaEn?.seconds * 1000 || 0;
+                                
+                                if (call > 0 && arrival > 0) {
+                                    totalQualityWaitingSeconds += Math.floor((arrival - call) / 1000);
+                                } else if (call > 0 && p.calidadEstado === 'esperando') {
+                                    totalQualityWaitingSeconds += Math.floor((Date.now() - call) / 1000);
+                                }
+                                
+                                if (arrival > 0 && approval > 0) {
+                                    totalQualityInspectionSeconds += Math.floor((approval - arrival) / 1000);
+                                } else if (arrival > 0 && p.calidadEstado === 'inspeccion') {
+                                    totalQualityInspectionSeconds += Math.floor((Date.now() - arrival) / 1000);
+                                }
+                            });
+
+                            // Operator log hours
+                            const operatorHours: Record<string, { totalSeconds: number; type: string }> = {};
+                            logs.forEach(log => {
+                                const entry = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                                const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || 0;
+                                
+                                let duration = 0;
+                                if (entry && exit) {
+                                    duration = Math.floor((exit - entry) / 1000);
+                                } else if (entry && processes.some(p => p.id === log.procesoId && p.estado === 'Iniciado')) {
+                                    duration = Math.floor((Date.now() - entry) / 1000);
+                                }
+
+                                const name = log.nombre || log.nombreColaborador || 'Desconocido';
+                                if (!operatorHours[name]) {
+                                    operatorHours[name] = { totalSeconds: 0, type: log.tipo === 'apoyo' ? 'Apoyo' : 'Base' };
+                                }
+                                operatorHours[name].totalSeconds += duration;
+                            });
+
+                            let totalProductiveSeconds = 0;
+                            Object.values(operatorHours).forEach(op => {
+                                totalProductiveSeconds += op.totalSeconds;
+                            });
+
+                            const stats = {
+                                totalOPs,
+                                totalUnitsProduced,
+                                totalSetupSeconds,
+                                totalReprocesoSeconds,
+                                totalPauseSeconds,
+                                totalQualityWaitingSeconds,
+                                totalQualityInspectionSeconds,
+                                totalProductiveSeconds,
+                                pauseReasons,
+                                operatorHours
+                            };
+
+                            const formatDuration = (seconds: number) => {
+                                if (seconds < 0) return '0s';
+                                const h = Math.floor(seconds / 3600);
+                                const m = Math.floor((seconds % 3600) / 60);
+                                return `${h}h ${m}m`;
+                            };
+
+                            return (
+                                <div className="space-y-10 animate-in fade-in duration-500">
+                                    
+                                    {/* Action PDF Button */}
+                                    <div className="flex justify-end">
+                                        <button
+                                            onClick={() => generateRangeReportPDF(stats)}
+                                            className="flex items-center gap-2 bg-success-green text-black px-6 py-3 rounded-xl font-black transition-all shadow-lg hover:bg-green-600 uppercase tracking-widest text-xs"
+                                        >
+                                            <FileText className="h-4 w-4" /> Exportar Reporte Consolidado a PDF
+                                        </button>
+                                    </div>
+
+                                    {/* EXECUTIVE METRICS CARDS */}
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                        {/* OP processed */}
+                                        <div className="glass p-6 rounded-3xl border border-white/10 bg-white/5 flex flex-col justify-between">
+                                            <p className="text-[10px] font-black uppercase text-gray-500 tracking-wider">OPs Procesadas</p>
+                                            <h3 className="text-3xl font-black text-white mt-4">{totalOPs} OP(s)</h3>
+                                            <p className="text-[10px] text-gray-400 mt-2 font-medium">Órdenes distintas iniciadas</p>
+                                        </div>
+
+                                        {/* Produced Units */}
+                                        <div className="glass p-6 rounded-3xl border border-white/10 bg-white/5 flex flex-col justify-between">
+                                            <p className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Unidades Producidas</p>
+                                            <h3 className="text-3xl font-black text-white mt-4">{totalUnitsProduced.toLocaleString()} Uds</h3>
+                                            <p className="text-[10px] text-gray-400 mt-2 font-medium">Total de volumen finalizado</p>
+                                        </div>
+
+                                        {/* Productive hours */}
+                                        <div className="glass p-6 rounded-3xl border border-white/10 bg-white/5 flex flex-col justify-between">
+                                            <p className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Horas-Hombre Directas</p>
+                                            <h3 className="text-3xl font-black text-white mt-4">{formatDuration(totalProductiveSeconds)}</h3>
+                                            <p className="text-[10px] text-gray-400 mt-2 font-medium">Suma de permanencia de personal</p>
+                                        </div>
+
+                                        {/* Pauses Time */}
+                                        <div className="glass p-6 rounded-3xl border border-white/10 bg-white/5 flex flex-col justify-between">
+                                            <p className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Tiempo Perdido Pausas</p>
+                                            <h3 className="text-3xl font-black text-danger-red mt-4">{formatDuration(totalPauseSeconds)}</h3>
+                                            <p className="text-[10px] text-gray-400 mt-2 font-medium">Tiempo muerto acumulado</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {/* Setup time card */}
+                                        <div className="glass p-6 rounded-3xl border border-white/10 bg-white/5 text-center">
+                                            <p className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Ajuste de Máquinas (Setup)</p>
+                                            <h4 className="text-2xl font-black text-accent-purple mt-2">{formatDuration(totalSetupSeconds)}</h4>
+                                        </div>
+
+                                        {/* Reproceso time card */}
+                                        <div className="glass p-6 rounded-3xl border border-white/10 bg-white/5 text-center">
+                                            <p className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Trabajo de Reproceso</p>
+                                            <h4 className="text-2xl font-black text-warning-yellow mt-2">{formatDuration(totalReprocesoSeconds)}</h4>
+                                        </div>
+
+                                        {/* Quality waiting time card */}
+                                        <div className="glass p-6 rounded-3xl border border-white/10 bg-white/5 text-center">
+                                            <p className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Espera + Inspección Calidad</p>
+                                            <h4 className="text-2xl font-black text-primary-blue mt-2">
+                                                {formatDuration(totalQualityWaitingSeconds + totalQualityInspectionSeconds)}
+                                            </h4>
+                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">
+                                                Espera: {formatDuration(totalQualityWaitingSeconds)} • Insp: {formatDuration(totalQualityInspectionSeconds)}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* PAUSES BREAKDOWN TABLE */}
+                                    <div className="glass rounded-[2rem] border border-white/10 overflow-hidden bg-white/5 p-6">
+                                        <h3 className="text-lg font-black uppercase tracking-wider mb-4 text-warning-yellow">Causas de Pausas (Tiempos Muertos)</h3>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left text-xs">
+                                                <thead>
+                                                    <tr className="border-b border-white/10 text-[10px] font-black uppercase text-gray-500 tracking-wider">
+                                                        <th className="pb-3 w-1/2">Motivo de la Pausa</th>
+                                                        <th className="pb-3 text-center">Frecuencia</th>
+                                                        <th className="pb-3 text-right">Tiempo Perdido</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-white/5 text-gray-300 font-medium">
+                                                    {Object.keys(pauseReasons).length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={3} className="py-6 text-center text-gray-500 italic">No se registraron pausas en este periodo</td>
+                                                        </tr>
+                                                    ) : (
+                                                        Object.entries(pauseReasons).map(([reason, rData]: [string, any]) => (
+                                                            <tr key={reason} className="hover:bg-white/[0.01]">
+                                                                <td className="py-4 font-bold text-white uppercase">{reason}</td>
+                                                                <td className="py-4 text-center font-bold text-gray-400">{rData.count} vez/veces</td>
+                                                                <td className="py-4 text-right font-mono font-bold text-danger-red">{formatDuration(rData.duration)}</td>
+                                                            </tr>
+                                                        ))
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    {/* OPERATORS WORK HOURS TABLE */}
+                                    <div className="glass rounded-[2rem] border border-white/10 overflow-hidden bg-white/5 p-6">
+                                        <h3 className="text-lg font-black uppercase tracking-wider mb-4 text-emerald-400">Permanencia por Colaborador</h3>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left text-xs">
+                                                <thead>
+                                                    <tr className="border-b border-white/10 text-[10px] font-black uppercase text-gray-500 tracking-wider">
+                                                        <th className="pb-3 w-1/2">Colaborador</th>
+                                                        <th className="pb-3 text-center">Tipo Registro</th>
+                                                        <th className="pb-3 text-right">Tiempo Total Registrado</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-white/5 text-gray-300 font-medium">
+                                                    {Object.keys(operatorHours).length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={3} className="py-6 text-center text-gray-500 italic">No hay registros de horas de personal</td>
+                                                        </tr>
+                                                    ) : (
+                                                        Object.entries(operatorHours)
+                                                            .sort((a,b) => b[1].totalSeconds - a[1].totalSeconds)
+                                                            .map(([name, data]: [string, any]) => (
+                                                                <tr key={name} className="hover:bg-white/[0.01]">
+                                                                    <td className="py-4 font-bold text-white uppercase">{name}</td>
+                                                                    <td className="py-4 text-center">
+                                                                        <span className={cn(
+                                                                            "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border",
+                                                                            data.type === 'Apoyo'
+                                                                                ? "bg-primary-blue/10 border-primary-blue/20 text-primary-blue"
+                                                                                : "bg-success-green/10 border-success-green/20 text-success-green"
+                                                                        )}>
+                                                                            {data.type}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="py-4 text-right font-mono font-bold text-white">{formatDuration(data.totalSeconds)}</td>
+                                                                </tr>
+                                                            ))
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    {/* OBSERVATIONS AND COMMENTS */}
+                                    <div className="glass rounded-[2rem] border border-white/10 overflow-hidden bg-white/5 p-6">
+                                        <h3 className="text-lg font-black uppercase tracking-wider mb-4 text-primary-blue">Observaciones Registradas</h3>
+                                        <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                                            {comments.length === 0 ? (
+                                                <p className="text-xs text-gray-500 italic py-6 text-center">No hay observaciones registradas en este periodo</p>
+                                            ) : (
+                                                [...comments]
+                                                    .sort((a, b) => {
+                                                        const timeA = a.creadoEn?.toMillis?.() || a.creadoEn?.seconds * 1000 || 0;
+                                                        const timeB = b.creadoEn?.toMillis?.() || b.creadoEn?.seconds * 1000 || 0;
+                                                        return timeB - timeA;
+                                                    })
+                                                    .map(com => (
+                                                        <div key={com.id} className="p-4 bg-white/5 border border-white/5 rounded-2xl space-y-2">
+                                                            <div className="flex justify-between items-center text-[10px] font-black uppercase text-gray-500 tracking-wider">
+                                                                <span>{com.nombreColaborador} (ID: {com.colaboradorId})</span>
+                                                                <span>{com.creadoEn ? format(com.creadoEn.toDate(), 'dd/MM/yyyy HH:mm:ss') : 'Reciente'}</span>
+                                                            </div>
+                                                            <p className="text-sm font-bold text-white">"{com.comentario}"</p>
+                                                            <div className="flex gap-4 text-[9px] font-bold text-gray-500 uppercase">
+                                                                <span>OP: {com.ordenProduccion}</span>
+                                                                <span>Etapa: {com.etapa}</span>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                </div>
+                            );
+                        })()}
                     </>
                 )}
 
