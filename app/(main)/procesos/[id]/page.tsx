@@ -1139,7 +1139,7 @@ export default function MonitoreoPage() {
                             <div className="text-center md:text-left">
                                 <p className="text-[clamp(0.6rem,1vw,0.8rem)] font-black text-gray-400 uppercase tracking-[0.3em] mb-1">Unidades Pendientes</p>
                                 <h3 className="text-[clamp(1.8rem,3vw,2.5rem)] font-black tracking-tight text-white leading-none">
-                                    {Math.max(0, proceso!.cantidadProducir - (proceso!.trabajoCompletado || 0)).toLocaleString()}
+                                    {Math.max(0, proceso!.cantidadProducir - Math.floor(calculatedUnits)).toLocaleString()}
                                     <span className="text-sm text-gray-500 ml-4 font-bold uppercase">Uds</span>
                                 </h3>
                             </div>

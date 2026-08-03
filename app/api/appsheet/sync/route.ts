@@ -42,9 +42,13 @@ export async function POST() {
             return NextResponse.json({ error: 'La respuesta de AppSheet no es un array de datos' }, { status: 500 });
         }
 
-        // 1. Obtener órdenes actuales en Firebase para evitar duplicados por OP
+        // 1. Obtener órdenes actuales en Firebase para evitar duplicados por OP y actualizar campos faltantes
         const ordersSnapshot = await getDocs(collection(db, 'maestro_ordenes'));
-        const existingOPs = new Set(ordersSnapshot.docs.map(doc => doc.data().op));
+        const existingOrdersMap = new Map<string, { id: string; articulo?: string }>();
+        ordersSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            existingOrdersMap.set(data.op, { id: doc.id, articulo: data.articulo });
+        });
 
         const batch = writeBatch(db);
         let importedCount = 0;
@@ -66,9 +70,22 @@ export async function POST() {
                 return;
             }
 
+            const newArticulo = String(row['ARTICULO'] || '').trim().toUpperCase();
+
             // Filtro de duplicados
-            if (existingOPs.has(op)) {
-                alreadyExistsCount++;
+            if (existingOrdersMap.has(op)) {
+                const existing = existingOrdersMap.get(op)!;
+                // Si la orden ya existe pero no tiene el código de artículo (o cambió), actualizamos el documento
+                if (!existing.articulo || existing.articulo !== newArticulo) {
+                    const orderRef = doc(db, 'maestro_ordenes', existing.id);
+                    batch.update(orderRef, {
+                        articulo: newArticulo,
+                        fechaSincro: new Date().toISOString()
+                    });
+                    importedCount++;
+                } else {
+                    alreadyExistsCount++;
+                }
                 return;
             }
 
@@ -82,12 +99,12 @@ export async function POST() {
                 cantidad: Number(row['CANT TEORICA']) || 0,
                 velocidadTeorica: 0,
                 activo: true,
-                articulo: String(row['ARTICULO'] || '').trim().toUpperCase(),
+                articulo: newArticulo,
                 importadoDeAppSheet: true,
                 fechaSincro: new Date().toISOString()
             });
             importedCount++;
-            existingOPs.add(op);
+            existingOrdersMap.set(op, { id: newOrderRef.id, articulo: newArticulo });
         });
 
         if (importedCount > 0) {
