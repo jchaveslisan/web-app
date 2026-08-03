@@ -772,7 +772,9 @@ export default function MonitoreoPage() {
                                         <div className="space-y-6">
                                             {/* Producto */}
                                             <div className="space-y-1">
-                                                <p className="text-[clamp(0.6rem,1vw,0.8rem)] font-black text-gray-500 uppercase tracking-widest">Producto en proceso</p>
+                                                <p className="text-[clamp(0.6rem,1vw,0.8rem)] font-black text-gray-500 uppercase tracking-widest">
+                                                    Producto en proceso {proceso.articulo && <span className="text-primary-blue font-mono">({proceso.articulo})</span>}
+                                                </p>
                                                 <h4 className="text-[clamp(1.5rem,2.5vw,2rem)] font-black text-white leading-tight uppercase line-clamp-2">{proceso.producto}</h4>
                                             </div>
 
@@ -1060,7 +1062,9 @@ export default function MonitoreoPage() {
                                 <div className="space-y-4 flex-1">
                                     {/* Producto */}
                                     <div className="space-y-1">
-                                        <p className="text-[clamp(0.6rem,1vw,0.8rem)] font-black text-gray-400 uppercase tracking-[0.2em]">Producto en proceso</p>
+                                        <p className="text-[clamp(0.6rem,1vw,0.8rem)] font-black text-gray-400 uppercase tracking-[0.2em]">
+                                            Producto en proceso {proceso.articulo && <span className="text-primary-blue font-mono">({proceso.articulo})</span>}
+                                        </p>
                                         <h4 className="text-[clamp(1.5rem,2.2vw,2rem)] font-black text-white leading-tight uppercase line-clamp-2">{proceso.producto}</h4>
                                     </div>
 

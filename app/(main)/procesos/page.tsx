@@ -598,7 +598,9 @@ export default function ProcesosPage() {
                                                             <td className="p-5">
                                                                 <div>
                                                                     <div className="font-bold text-white text-sm md:text-base leading-tight break-words max-w-[320px] uppercase" title={proceso.producto}>{proceso.producto}</div>
-                                                                    <div className="text-xs text-gray-500 font-medium">Lote: {proceso.lote}</div>
+                                                                    <div className="text-xs text-gray-500 font-medium">
+                                                                        Lote: {proceso.lote}{proceso.articulo && ` | Art: ${proceso.articulo}`}
+                                                                    </div>
                                                                 </div>
                                                             </td>
                                                             <td className="p-5">

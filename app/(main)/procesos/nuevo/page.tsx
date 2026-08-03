@@ -79,6 +79,7 @@ export default function NuevoProcesoPage() {
             const procesoId = await createProceso({
                 ordenProduccion: tipoProceso === 'empaque' || tipoProceso === 'otros' ? data.op : 'N/A',
                 producto: data.producto,
+                articulo: tipoProceso === 'empaque' || tipoProceso === 'otros' ? (data.articulo || '') : 'N/A',
                 lote: tipoProceso === 'empaque' || tipoProceso === 'otros' ? data.lote : 'N/A',
                 etapa: tipoProceso === 'empaque' || tipoProceso === 'otros' ? data.etapa : 'N/A',
                 fechaFabricacion: tipoProceso === 'empaque' || tipoProceso === 'otros' ? data.fechaFabricacion : 'N/A',
@@ -231,6 +232,7 @@ export default function NuevoProcesoPage() {
                                                                 setValue('lote', o.lote);
                                                                 setValue('etapa', o.etapa);
                                                                 setValue('cantidad', o.cantidad);
+                                                                setValue('articulo', o.articulo || '');
                                                                 
                                                                 const matchingArt = articulos.find(a => 
                                                                     (a.descripcion && a.descripcion.trim().toUpperCase() === o.producto.trim().toUpperCase()) ||
@@ -283,14 +285,25 @@ export default function NuevoProcesoPage() {
                         {tipoProceso === 'empaque' ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div className="space-y-6">
-                                    <div>
-                                        <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Orden de Producción (OP)</label>
-                                        <input
-                                            {...register('op')}
-                                            readOnly
-                                            className="w-full bg-white/5 opacity-60 cursor-not-allowed border border-white/10 rounded-xl py-3 px-4 focus:outline-none transition-all font-bold text-lg"
-                                            placeholder="Seleccione una OP arriba..."
-                                        />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Orden de Producción (OP)</label>
+                                            <input
+                                                {...register('op')}
+                                                readOnly
+                                                className="w-full bg-white/5 opacity-60 cursor-not-allowed border border-white/10 rounded-xl py-3 px-4 focus:outline-none transition-all font-bold text-lg"
+                                                placeholder="Seleccione una OP arriba..."
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Código de Artículo</label>
+                                            <input
+                                                {...register('articulo')}
+                                                readOnly
+                                                className="w-full bg-white/5 opacity-60 cursor-not-allowed border border-white/10 rounded-xl py-3 px-4 focus:outline-none transition-all font-mono"
+                                                placeholder="..."
+                                            />
+                                        </div>
                                     </div>
 
                                     <div>
@@ -424,14 +437,25 @@ export default function NuevoProcesoPage() {
                         ) : tipoProceso === 'otros' ? (
                             // Formulario para "Otros Procesos" - sin temporizador pero con datos de producción
                             <div className="max-w-2xl mx-auto space-y-6">
-                                <div>
-                                    <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Orden de Producción (OP)</label>
-                                    <input
-                                        {...register('op')}
-                                        readOnly
-                                        className="w-full bg-white/5 opacity-60 cursor-not-allowed border border-white/10 rounded-xl py-3 px-4 focus:outline-none transition-all font-bold text-lg"
-                                        placeholder="Seleccione una OP arriba..."
-                                    />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Orden de Producción (OP)</label>
+                                        <input
+                                            {...register('op')}
+                                            readOnly
+                                            className="w-full bg-white/5 opacity-60 cursor-not-allowed border border-white/10 rounded-xl py-3 px-4 focus:outline-none transition-all font-bold text-lg"
+                                            placeholder="Seleccione una OP arriba..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Código de Artículo</label>
+                                        <input
+                                            {...register('articulo')}
+                                            readOnly
+                                            className="w-full bg-white/5 opacity-60 cursor-not-allowed border border-white/10 rounded-xl py-3 px-4 focus:outline-none transition-all font-mono"
+                                            placeholder="..."
+                                        />
+                                    </div>
                                 </div>
 
                                 <div>

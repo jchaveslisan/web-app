@@ -16,6 +16,7 @@ interface ModalEditarProcesoProps {
 export default function ModalEditarProceso({ proceso, onClose, onSave }: ModalEditarProcesoProps) {
     const [formData, setFormData] = useState({
         ordenProduccion: proceso.ordenProduccion || '',
+        articulo: proceso.articulo || '',
         producto: proceso.producto || '',
         lote: proceso.lote || '',
         etapa: proceso.etapa || '',
@@ -66,7 +67,7 @@ export default function ModalEditarProceso({ proceso, onClose, onSave }: ModalEd
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-auto max-h-[70vh]">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="space-y-2">
                             <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Orden de Producción</label>
                             <input
@@ -75,6 +76,15 @@ export default function ModalEditarProceso({ proceso, onClose, onSave }: ModalEd
                                 onChange={(e) => setFormData({ ...formData, ordenProduccion: e.target.value.toUpperCase() })}
                                 className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
                                 required
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Código Artículo</label>
+                            <input
+                                type="text"
+                                value={formData.articulo}
+                                onChange={(e) => setFormData({ ...formData, articulo: e.target.value.toUpperCase() })}
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-mono font-bold outline-none focus:border-primary-blue transition-all"
                             />
                         </div>
                         <div className="space-y-2">
