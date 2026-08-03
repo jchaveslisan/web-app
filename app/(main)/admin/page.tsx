@@ -68,6 +68,7 @@ export default function AdminPage() {
 
     // For editing
     const [editValue, setEditValue] = useState<any>({});
+    const [regeneratedPinInfo, setRegeneratedPinInfo] = useState<{ nombre: string; pin: string } | null>(null);
 
     const user = useAuthStore(state => state.user);
 
@@ -441,6 +442,59 @@ export default function AdminPage() {
         }
     };
 
+    const handleRegeneratePin = async (colabId: string, nombreCompleto: string) => {
+        if (!confirm(`¿Está seguro de que desea regenerar el PIN para ${nombreCompleto}?`)) return;
+
+        let newPin = '';
+        let isUnique = false;
+        let attempts = 0;
+
+        while (!isUnique && attempts < 100) {
+            attempts++;
+            const rand = Math.floor(1000 + Math.random() * 9000).toString();
+            const exists = colaboradores.some(c => c.claveRegistro === rand);
+            if (!exists) {
+                newPin = rand;
+                isUnique = true;
+            }
+        }
+
+        if (!newPin) {
+            alert('No se pudo generar un PIN único. Por favor intente de nuevo.');
+            return;
+        }
+
+        try {
+            await updateDoc(doc(db, 'maestro_colaboradores', colabId), {
+                claveRegistro: newPin
+            });
+            setRegeneratedPinInfo({ nombre: nombreCompleto, pin: newPin });
+        } catch (error) {
+            console.error('Error regenerando PIN:', error);
+            alert('Hubo un error al actualizar el PIN en Firebase');
+        }
+    };
+
+    const handleGeneratePinForForm = () => {
+        let newPin = '';
+        let isUnique = false;
+        let attempts = 0;
+
+        while (!isUnique && attempts < 100) {
+            attempts++;
+            const rand = Math.floor(1000 + Math.random() * 9000).toString();
+            const exists = colaboradores.some(c => c.id !== editingItem?.id && c.claveRegistro === rand);
+            if (!exists) {
+                newPin = rand;
+                isUnique = true;
+            }
+        }
+
+        if (newPin) {
+            setEditValue((prev: any) => ({ ...prev, claveRegistro: newPin }));
+        }
+    };
+
     const handleAddUser = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newUsername || !newPassword) return;
@@ -677,12 +731,39 @@ export default function AdminPage() {
                                     </div>
                                     <div>
                                         <label className="block text-xs font-black text-gray-500 uppercase mb-2">ID / Clave de Registro</label>
-                                        <input
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary-blue"
-                                            value={newID}
-                                            onChange={(e) => setNewID(e.target.value)}
-                                            placeholder="Ej: 887766"
-                                        />
+                                        <div className="flex gap-2">
+                                            <input
+                                                className="flex-1 bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary-blue"
+                                                value={newID}
+                                                onChange={(e) => setNewID(e.target.value)}
+                                                placeholder="Ej: 8877"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    let newPin = '';
+                                                    let isUnique = false;
+                                                    let attempts = 0;
+                                                    while (!isUnique && attempts < 100) {
+                                                        attempts++;
+                                                        const rand = Math.floor(1000 + Math.random() * 9000).toString();
+                                                        const exists = colaboradores.some(c => c.claveRegistro === rand);
+                                                        if (!exists) {
+                                                            newPin = rand;
+                                                            isUnique = true;
+                                                        }
+                                                    }
+                                                    if (newPin) {
+                                                        setNewID(newPin);
+                                                    }
+                                                }}
+                                                className="bg-white/10 hover:bg-white/20 text-white font-bold px-4 rounded-xl transition-all flex items-center gap-2 border border-white/10"
+                                                title="Generar PIN"
+                                            >
+                                                <RefreshCw className="h-4 w-4" />
+                                                <span className="text-xs font-black uppercase">Generar</span>
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:col-span-2">
                                         <div>
@@ -739,6 +820,13 @@ export default function AdminPage() {
                                             </td>
                                             <td className="p-5 text-right space-x-2">
                                                 <button
+                                                    onClick={() => handleRegeneratePin(colab.id, colab.nombreCompleto)}
+                                                    className="p-2 hover:bg-white/10 text-primary-blue rounded-lg transition-all"
+                                                    title="Regenerar PIN"
+                                                >
+                                                    <Key className="h-5 w-5" />
+                                                </button>
+                                                <button
                                                     onClick={() => {
                                                         setEditingItem({ id: colab.id, type: 'personal', data: colab });
                                                         setEditValue({
@@ -749,10 +837,15 @@ export default function AdminPage() {
                                                         });
                                                     }}
                                                     className="p-2 hover:bg-white/10 text-gray-400 rounded-lg transition-all"
+                                                    title="Editar Colaborador"
                                                 >
                                                     <Edit2 className="h-5 w-5" />
                                                 </button>
-                                                <button onClick={() => handleDelete(colab.id, 'maestro_colaboradores')} className="p-2 hover:bg-danger-red/20 text-danger-red rounded-lg transition-all">
+                                                <button
+                                                    onClick={() => handleDelete(colab.id, 'maestro_colaboradores')}
+                                                    className="p-2 hover:bg-danger-red/20 text-danger-red rounded-lg transition-all"
+                                                    title="Eliminar Colaborador"
+                                                >
                                                     <Trash2 className="h-5 w-5" />
                                                 </button>
                                             </td>
@@ -1608,6 +1701,57 @@ export default function AdminPage() {
                                 className="w-full bg-success-green text-black py-5 rounded-3xl font-black text-xl hover:bg-green-600 transition-all flex items-center justify-center gap-4 shadow-xl"
                             >
                                 <Check className="h-6 w-6" /> GUARDAR CAMBIOS
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE PIN REGENERADO */}
+            {regeneratedPinInfo && (
+                <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+                    <div className="glass w-full max-w-md rounded-[2.5rem] overflow-hidden flex flex-col border border-white/10 shadow-2xl animate-in zoom-in duration-300">
+                        <div className="p-8 border-b border-white/10 flex items-center justify-between bg-white/5">
+                            <h3 className="text-xl font-black uppercase flex items-center gap-3 text-success-green">
+                                <Key className="h-6 w-6" /> PIN Regenerado
+                            </h3>
+                            <button onClick={() => setRegeneratedPinInfo(null)} className="p-2 hover:bg-white/10 rounded-full text-gray-400">
+                                <X className="h-6 w-6" />
+                            </button>
+                        </div>
+                        <div className="p-8 text-center space-y-6">
+                            <p className="text-sm text-gray-300">
+                                Se ha generado un nuevo PIN único para el colaborador:
+                            </p>
+                            <h4 className="text-lg font-black uppercase text-white tracking-wide">
+                                {regeneratedPinInfo.nombre}
+                            </h4>
+                            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 font-mono text-4xl font-bold tracking-[0.3em] text-primary-blue select-all flex items-center justify-center gap-2">
+                                {regeneratedPinInfo.pin}
+                            </div>
+                            <p className="text-xs text-danger-red font-medium">
+                                Asegúrese de compartir este PIN de manera privada con el colaborador.
+                            </p>
+                        </div>
+                        <div className="p-8 border-t border-white/10 bg-white/5 flex gap-4">
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        await navigator.clipboard.writeText(regeneratedPinInfo.pin);
+                                        alert("¡PIN copiado al portapapeles!");
+                                    } catch (err) {
+                                        console.error("No se pudo copiar", err);
+                                    }
+                                }}
+                                className="flex-1 bg-primary-blue hover:bg-primary-blue-dark text-white font-bold py-3 px-6 rounded-xl transition-all"
+                            >
+                                Copiar PIN
+                            </button>
+                            <button
+                                onClick={() => setRegeneratedPinInfo(null)}
+                                className="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold py-3 px-6 rounded-xl transition-all"
+                            >
+                                Cerrar
                             </button>
                         </div>
                     </div>

@@ -115,7 +115,18 @@ export const subscribeColaboradoresLog = (procesoId: string, callback: (logs: Co
     });
 };
 
+let activeColaboradoresCache: {
+    data: (ColaboradorLog & { procesoEstado?: string })[];
+    timestamp: number;
+} | null = null;
+
+export const clearActiveColaboradoresCache = () => {
+    activeColaboradoresCache = null;
+    console.log("⚡ Caché de colaboradores activos limpiada");
+};
+
 export const addColaboradorToLog = async (log: Omit<ColaboradorLog, 'id' | 'horaSalida'>) => {
+    clearActiveColaboradoresCache();
     return await addDoc(collection(db, 'colaboradores_log'), {
         ...log,
         horaSalida: null
@@ -123,27 +134,51 @@ export const addColaboradorToLog = async (log: Omit<ColaboradorLog, 'id' | 'hora
 };
 
 export const getColaboradoresActivos = async (): Promise<(ColaboradorLog & { procesoEstado?: string })[]> => {
-    // 1. Traer todos los logs donde horaSalida sea estrictamente null
-    const q = query(
+    const now = Date.now();
+    if (activeColaboradoresCache && (now - activeColaboradoresCache.timestamp < 3000)) {
+        console.log("⚡ Retornando colaboradores activos desde caché");
+        return activeColaboradoresCache.data;
+    }
+
+    // 1. Traer los procesos activos en paralelo (Registrado, Iniciado, Pausado)
+    const activeProcsQuery = query(
+        collection(db, 'procesos'),
+        where('estado', 'in', ['Registrado', 'Iniciado', 'Pausado'])
+    );
+    
+    // 2. Traer todos los logs donde horaSalida sea estrictamente null
+    const openLogsQuery = query(
         collection(db, 'colaboradores_log'),
         where('horaSalida', '==', null)
     );
-    const snapshot = await getDocs(q);
-    const logsOpen = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ColaboradorLog));
 
-    // 2. Para cada log abierto, necesitamos verificar si su proceso sigue activo
-    const results = [];
-    for (const log of logsOpen) {
-        // Obtenemos el proceso de este log
-        const procDoc = await getDoc(doc(db, 'procesos', log.procesoId));
-        if (procDoc.exists()) {
-            const procData = procDoc.data();
-            // Solo lo consideramos "Activo Global" si el proceso NO está finalizado
-            if (procData.estado !== 'Finalizado') {
-                results.push({ ...log, procesoEstado: procData.estado });
-            }
+    // Ejecutar ambas consultas en paralelo
+    const [activeProcsSnapshot, openLogsSnapshot] = await Promise.all([
+        getDocs(activeProcsQuery),
+        getDocs(openLogsQuery)
+    ]);
+
+    // Crear un mapa de procesos activos para O(1) lookups
+    const activeProcsMap = new Map<string, any>();
+    activeProcsSnapshot.docs.forEach(docSnap => {
+        activeProcsMap.set(docSnap.id, docSnap.data());
+    });
+
+    // Filtrar los logs de colaboradores
+    const results: (ColaboradorLog & { procesoEstado?: string })[] = [];
+    openLogsSnapshot.docs.forEach(docSnap => {
+        const log = { id: docSnap.id, ...docSnap.data() } as ColaboradorLog;
+        const procData = activeProcsMap.get(log.procesoId);
+        if (procData) {
+            results.push({ ...log, procesoEstado: procData.estado });
         }
-    }
+    });
+
+    // Guardar en caché
+    activeColaboradoresCache = {
+        data: results,
+        timestamp: now
+    };
 
     return results;
 };
@@ -414,6 +449,7 @@ export const executeBulkExit = async (
 
         // 6. Commit batch
         await batch.commit();
+        clearActiveColaboradoresCache();
         console.log(`✅ Salida masiva completada exitosamente`);
 
         return {

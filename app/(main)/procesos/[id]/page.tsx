@@ -27,7 +27,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useProcesoRealtime } from '@/hooks/useProcesoRealtime';
 import { format, differenceInSeconds, addSeconds } from 'date-fns';
-import { updateProceso, addEventoLog, updateDoc, getColaboradorByClave, addColaboradorToLog, getColaboradoresActivos } from '@/lib/firebase-db';
+import { updateProceso, addEventoLog, updateDoc, getColaboradorByClave, addColaboradorToLog, getColaboradoresActivos, clearActiveColaboradoresCache } from '@/lib/firebase-db';
 import { useAuthStore } from '@/lib/auth-service';
 import ModalAddColaborador from '@/components/proceso/ModalAddColaborador';
 import ModalJustificacion from '@/components/proceso/ModalJustificacion';
@@ -268,6 +268,7 @@ export default function MonitoreoPage() {
                 await updateDoc(docRef, {
                     horaSalida: Timestamp.now()
                 });
+                clearActiveColaboradoresCache();
                 const updatesToProcess: any = {
                     trabajoCompletado: calculatedUnits,
                     ultimoUpdate: Timestamp.now()
@@ -335,6 +336,7 @@ export default function MonitoreoPage() {
                         horaSalida: now
                     });
                 }
+                clearActiveColaboradoresCache();
 
                 await addEventoLog(id, "Setup Finalizado", `Duración total: ${setupTimerStr}. Salida automática de ${activos.length} colaboradores para registro de tiempos.`, "SETUP", user?.username || 'sistema');
             }
@@ -467,6 +469,7 @@ export default function MonitoreoPage() {
                     horaSalida: now
                 });
             }
+            clearActiveColaboradoresCache();
 
             await addEventoLog(id, "Proceso Finalizado", `El proceso ha sido marcado como COMPLETADO. Salida automática de ${activos.length} colaboradores.`, "ESTADO", user?.username || 'sistema');
             handleBack();
