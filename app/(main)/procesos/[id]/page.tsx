@@ -1297,7 +1297,7 @@ export default function MonitoreoPage() {
                                                                             </span>
                                                                         </div>
                                                                         <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em] mt-0.5">
-                                                                            ID: {colab.colaboradorId} • Ingreso: {format((colab.horaIngreso as any).toDate(), 'HH:mm')}
+                                                                            ID: {colab.colaboradorId} • Ingreso: {format((colab.horaIngreso as any).toDate(), 'dd/MM/yyyy HH:mm')}
                                                                         </p>
                                                                     </div>
                                                                 </div>
@@ -1347,7 +1347,7 @@ export default function MonitoreoPage() {
                                                                 <div className="text-right">
                                                                     <p className="text-[9px] font-black text-gray-600 uppercase">Movimiento</p>
                                                                     <p className="font-mono text-[10px] text-gray-500 italic">
-                                                                        {format((colab.horaIngreso as any).toDate(), 'HH:mm')} {'->'} {format((colab.horaSalida as any).toDate(), 'HH:mm')}
+                                                                        {format((colab.horaIngreso as any).toDate(), 'dd/MM/yyyy HH:mm')} {'->'} {format((colab.horaSalida as any).toDate(), 'dd/MM/yyyy HH:mm')}
                                                                     </p>
                                                                 </div>
                                                             </div>
@@ -1411,7 +1411,7 @@ export default function MonitoreoPage() {
                                             <div className="absolute top-0 -left-[9px] h-4 w-4 rounded-full bg-primary-blue border-4 border-black" />
                                             <div className="flex justify-between items-start mb-2">
                                                 <p className="text-xs font-black text-primary-blue uppercase tracking-widest">
-                                                    {ev.horaEvento ? format((ev.horaEvento as any).toDate(), 'HH:mm:ss') : 'Reciente'}
+                                                    {ev.horaEvento ? format((ev.horaEvento as any).toDate(), 'dd/MM/yyyy HH:mm:ss') : 'Reciente'}
                                                 </p>
                                                 <span className="text-[10px] font-bold text-gray-500 bg-white/5 px-2 py-1 rounded-lg">
                                                     {ev.clasificacion}
@@ -1437,7 +1437,7 @@ export default function MonitoreoPage() {
                                                 <div className="absolute top-0 -left-[9px] h-4 w-4 rounded-full bg-primary-blue border-4 border-black" />
                                                 <div className="flex justify-between items-start mb-2">
                                                     <p className="text-xs font-black text-primary-blue uppercase tracking-widest">
-                                                        {com.creadoEn ? format((com.creadoEn as any).toDate(), 'HH:mm:ss') : 'Reciente'}
+                                                        {com.creadoEn ? format((com.creadoEn as any).toDate(), 'dd/MM/yyyy HH:mm:ss') : 'Reciente'}
                                                     </p>
                                                     <span className="text-[10px] font-bold text-gray-500 bg-white/5 px-2 py-1 rounded-lg">
                                                         OBSERVACIÓN

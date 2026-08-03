@@ -478,8 +478,8 @@ export default function AdminPage() {
                         return [
                             log.nombre || (log as any).nombreColaborador,
                             log.tipo === 'colaborador' ? 'DIRECTO' : 'SETUP',
-                            log.horaIngreso ? format(log.horaIngreso.toDate(), 'HH:mm:ss') : '-',
-                            log.horaSalida ? format(log.horaSalida.toDate(), 'HH:mm:ss') : '-',
+                            log.horaIngreso ? format(log.horaIngreso.toDate(), 'dd/MM/yyyy HH:mm:ss') : '-',
+                            log.horaSalida ? format(log.horaSalida.toDate(), 'dd/MM/yyyy HH:mm:ss') : '-',
                             dur ? formatDuration(dur) : '-'
                         ];
                     }),
@@ -497,7 +497,7 @@ export default function AdminPage() {
                 startY: 30,
                 head: [['Hora', 'Etapa', 'Evento', 'Justificación', 'Usuario']],
                 body: sortedEvents.map(evt => [
-                    evt.horaEvento ? format(evt.horaEvento.toDate(), 'HH:mm:ss') : '-',
+                    evt.horaEvento ? format(evt.horaEvento.toDate(), 'dd/MM/yyyy HH:mm:ss') : '-',
                     evt.etapa || '-',
                     evt.evento,
                     evt.justificacion || '-',
@@ -517,7 +517,7 @@ export default function AdminPage() {
                     startY: 30,
                     head: [['Hora', 'Etapa', 'Colaborador', 'Observación / Comentario']],
                     body: coms.map(com => [
-                        com.creadoEn ? format(com.creadoEn.toDate(), 'HH:mm:ss') : '-',
+                        com.creadoEn ? format(com.creadoEn.toDate(), 'dd/MM/yyyy HH:mm:ss') : '-',
                         com.etapa || '-',
                         `${com.nombreColaborador} (${com.colaboradorId})`,
                         com.comentario
@@ -2138,9 +2138,9 @@ export default function AdminPage() {
                                                                                                 {log.tipo || 'colaborador'}
                                                                                             </span>
                                                                                         </td>
-                                                                                        <td className="p-3 font-mono">{entryDate ? format(entryDate, 'HH:mm:ss') : '-'}</td>
+                                                                                        <td className="p-3 font-mono">{entryDate ? format(entryDate, 'dd/MM/yyyy HH:mm:ss') : '-'}</td>
                                                                                         <td className="p-3 font-mono">
-                                                                                            {exitDate ? format(exitDate, 'HH:mm:ss') : (log.horaSalida === null ? <span className="text-success-green animate-pulse">ACTIVO</span> : '-')}
+                                                                                            {exitDate ? format(exitDate, 'dd/MM/yyyy HH:mm:ss') : (log.horaSalida === null ? <span className="text-success-green animate-pulse">ACTIVO</span> : '-')}
                                                                                         </td>
                                                                                         <td className="p-3 text-right font-mono font-bold text-white">
                                                                                             {durSec > 0 ? formatDuration(durSec) : '-'}
