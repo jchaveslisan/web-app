@@ -56,6 +56,12 @@ export default function NuevoProcesoPage() {
     }, []);
 
     const onSubmit = async (data: any) => {
+        if (tipoProceso === 'empaque' || tipoProceso === 'otros') {
+            if (!data.op || !data.producto || !data.lote) {
+                alert("Debe seleccionar una Orden de Producción válida utilizando el buscador superior.");
+                return;
+            }
+        }
         try {
             const procesoId = await createProceso({
                 ordenProduccion: tipoProceso === 'empaque' || tipoProceso === 'otros' ? data.op : 'N/A',
@@ -256,8 +262,9 @@ export default function NuevoProcesoPage() {
                                         <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Orden de Producción (OP)</label>
                                         <input
                                             {...register('op')}
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary-blue/50 transition-all font-bold text-lg"
-                                            placeholder="Ej: OP-55443"
+                                            readOnly
+                                            className="w-full bg-white/5 opacity-60 cursor-not-allowed border border-white/10 rounded-xl py-3 px-4 focus:outline-none transition-all font-bold text-lg"
+                                            placeholder="Seleccione una OP arriba..."
                                         />
                                     </div>
 
@@ -265,8 +272,9 @@ export default function NuevoProcesoPage() {
                                         <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Producto / Proceso</label>
                                         <input
                                             {...register('producto')}
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary-blue/50 transition-all font-bold text-lg"
-                                            placeholder="Nombre del componente"
+                                            readOnly
+                                            className="w-full bg-white/5 opacity-60 cursor-not-allowed border border-white/10 rounded-xl py-3 px-4 focus:outline-none transition-all font-bold text-lg"
+                                            placeholder="Seleccione una OP arriba..."
                                         />
                                     </div>
 
@@ -275,7 +283,8 @@ export default function NuevoProcesoPage() {
                                             <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Lote</label>
                                             <input
                                                 {...register('lote')}
-                                                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary-blue/50 transition-all font-mono"
+                                                readOnly
+                                                className="w-full bg-white/5 opacity-60 cursor-not-allowed border border-white/10 rounded-xl py-3 px-4 focus:outline-none transition-all font-mono"
                                             />
                                         </div>
                                         <div>
@@ -314,7 +323,8 @@ export default function NuevoProcesoPage() {
                                             <input
                                                 type="number"
                                                 {...register('cantidad')}
-                                                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary-blue/50 transition-all font-bold text-lg"
+                                                readOnly
+                                                className="w-full bg-white/5 opacity-60 cursor-not-allowed border border-white/10 rounded-xl py-3 px-4 focus:outline-none transition-all font-bold text-lg"
                                             />
                                         </div>
                                         <div>
@@ -395,8 +405,9 @@ export default function NuevoProcesoPage() {
                                     <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Orden de Producción (OP)</label>
                                     <input
                                         {...register('op')}
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-warning-yellow/50 transition-all font-bold text-lg"
-                                        placeholder="Ej: OP-55443"
+                                        readOnly
+                                        className="w-full bg-white/5 opacity-60 cursor-not-allowed border border-white/10 rounded-xl py-3 px-4 focus:outline-none transition-all font-bold text-lg"
+                                        placeholder="Seleccione una OP arriba..."
                                     />
                                 </div>
 
@@ -404,8 +415,9 @@ export default function NuevoProcesoPage() {
                                     <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Producto / Artículo</label>
                                     <input
                                         {...register('producto')}
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-warning-yellow/50 transition-all font-bold text-lg"
-                                        placeholder="Nombre del artículo"
+                                        readOnly
+                                        className="w-full bg-white/5 opacity-60 cursor-not-allowed border border-white/10 rounded-xl py-3 px-4 focus:outline-none transition-all font-bold text-lg"
+                                        placeholder="Seleccione una OP arriba..."
                                     />
                                 </div>
 
@@ -414,7 +426,8 @@ export default function NuevoProcesoPage() {
                                         <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Lote</label>
                                         <input
                                             {...register('lote')}
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-warning-yellow/50 transition-all font-mono"
+                                            readOnly
+                                            className="w-full bg-white/5 opacity-60 cursor-not-allowed border border-white/10 rounded-xl py-3 px-4 focus:outline-none transition-all font-mono"
                                         />
                                     </div>
                                     <div>
