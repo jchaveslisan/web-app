@@ -25,18 +25,27 @@ import {
     BarChart3,
     MessageSquare,
     ShieldCheck,
-    AlertTriangle
+    AlertTriangle,
+    Package
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/auth-service';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, where, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, where, getDocs, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { getComentariosByOP, deleteComentario } from '@/lib/firebase-db';
 import { ColaboradorMaestro, Justificacion, Etapa, User, UserRole, OrdenMaestra } from '@/types';
 
 export default function AdminPage() {
-    const [tab, setTab] = useState<'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios' | 'ordenes' | 'reportes' | 'resumen'>('personal');
+    const [tab, setTab] = useState<'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios' | 'ordenes' | 'reportes' | 'resumen' | 'articulos'>('personal');
     const [colaboradores, setColaboradores] = useState<ColaboradorMaestro[]>([]);
+    const [newCedula, setNewCedula] = useState('');
+
+    // Articulos Form states
+    const [articulos, setArticulos] = useState<any[]>([]);
+    const [newArticuloCodigo, setNewArticuloCodigo] = useState('');
+    const [newArticuloDescripcion, setNewArticuloDescripcion] = useState('');
+    const [newArticuloVelocidad, setNewArticuloVelocidad] = useState(0);
+    const [newArticuloLinea, setNewArticuloLinea] = useState<'Humano' | 'Veterinario'>('Humano');
     const [justificacionesPausa, setJustificacionesPausa] = useState<Justificacion[]>([]);
     const [justificacionesSalida, setJustificacionesSalida] = useState<Justificacion[]>([]);
     const [etapas, setEtapas] = useState<Etapa[]>([]);
@@ -147,6 +156,17 @@ export default function AdminPage() {
                 .map(doc => ({ id: doc.id, ...doc.data() } as OrdenMaestra))
                 .filter(o => o.activo);
             setOrdenes(data);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Cargar Artículos
+    useEffect(() => {
+        const q = query(collection(db, 'maestro_articulos'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            data.sort((a: any, b: any) => (a.descripcion || '').localeCompare(b.descripcion || ''));
+            setArticulos(data);
         });
         return () => unsubscribe();
     }, []);
@@ -516,22 +536,59 @@ export default function AdminPage() {
 
     const handleAddColaborador = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newNombre || !newID) return;
+        if (!newNombre || !newCedula || !newID) {
+            alert("Por favor complete todos los campos obligatorios.");
+            return;
+        }
         try {
-            await addDoc(collection(db, 'maestro_colaboradores'), {
-                nombreCompleto: newNombre.toUpperCase(),
-                claveRegistro: newID,
+            const docRef = doc(db, 'maestro_colaboradores', newCedula.trim());
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                alert(`Ya existe un colaborador registrado con la identificación ${newCedula.trim()}.`);
+                return;
+            }
+
+            await setDoc(docRef, {
+                nombreCompleto: newNombre.toUpperCase().trim(),
+                claveRegistro: newID.trim(),
                 mensajeEntrada: newMensajeEntrada || null,
                 mensajeSalida: newMensajeSalida || null,
                 activo: true
             });
             setNewNombre('');
+            setNewCedula('');
             setNewID('');
             setNewMensajeEntrada('');
             setNewMensajeSalida('');
             setShowForm(false);
         } catch (error) {
             console.error(error);
+            alert("Error al guardar colaborador.");
+        }
+    };
+
+    const handleAddArticulo = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newArticuloCodigo || !newArticuloDescripcion || !newArticuloVelocidad) {
+            alert("Por favor complete todos los campos obligatorios.");
+            return;
+        }
+        try {
+            await addDoc(collection(db, 'maestro_articulos'), {
+                codigo: newArticuloCodigo.trim().toUpperCase(),
+                descripcion: newArticuloDescripcion.trim().toUpperCase(),
+                velocidadTeorica: Number(newArticuloVelocidad),
+                linea: newArticuloLinea,
+                creadoEn: new Date().toISOString()
+            });
+            setNewArticuloCodigo('');
+            setNewArticuloDescripcion('');
+            setNewArticuloVelocidad(0);
+            setNewArticuloLinea('Humano');
+            setShowForm(false);
+        } catch (error) {
+            console.error('Error al agregar artículo:', error);
+            alert('Hubo un error al guardar el artículo.');
         }
     };
 
@@ -656,6 +713,7 @@ export default function AdminPage() {
                 case 'etapa': collectionName = 'maestro_etapas'; break;
                 case 'usuario': collectionName = 'usuarios'; break;
                 case 'orden': collectionName = 'maestro_ordenes'; break;
+                case 'articulo': collectionName = 'maestro_articulos'; break;
             }
 
             await updateDoc(doc(db, collectionName, editingItem.id), editValue);
@@ -804,6 +862,17 @@ export default function AdminPage() {
                 >
                     <BarChart3 className="h-5 w-5" /> Resumen de Producción
                 </button>
+                <button
+                    onClick={() => { setTab('articulos'); setShowForm(false); }}
+                    className={cn(
+                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
+                        tab === 'articulos'
+                            ? "border-emerald-400 text-emerald-400"
+                            : "border-transparent text-gray-400 hover:text-white"
+                    )}
+                >
+                    <Package className="h-5 w-5" /> Artículos
+                </button>
             </div>
 
             <div className="max-w-4xl mx-auto">
@@ -823,24 +892,36 @@ export default function AdminPage() {
 
                         {showForm && (
                             <form onSubmit={handleAddColaborador} className="glass p-8 rounded-3xl mb-8 border border-primary-blue/30 animate-in fade-in slide-in-from-top-4 duration-300">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <div>
-                                        <label className="block text-xs font-black text-gray-500 uppercase mb-2">Nombre Completo</label>
+                                        <label className="block text-xs font-black text-gray-500 uppercase mb-2">Nombre Completo *</label>
                                         <input
                                             className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary-blue"
                                             value={newNombre}
                                             onChange={(e) => setNewNombre(e.target.value)}
                                             placeholder="Ej: JUAN PEREZ"
+                                            required
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-black text-gray-500 uppercase mb-2">ID / Clave de Registro</label>
+                                        <label className="block text-xs font-black text-gray-500 uppercase mb-2">Cédula / Identificación *</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary-blue"
+                                            value={newCedula}
+                                            onChange={(e) => setNewCedula(e.target.value)}
+                                            placeholder="Ej: 115100108"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-500 uppercase mb-2">PIN / Clave de Registro *</label>
                                         <div className="flex gap-2">
                                             <input
                                                 className="flex-1 bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary-blue"
                                                 value={newID}
                                                 onChange={(e) => setNewID(e.target.value)}
                                                 placeholder="Ej: 8877"
+                                                required
                                             />
                                             <button
                                                 type="button"
@@ -901,7 +982,8 @@ export default function AdminPage() {
                                 <thead>
                                     <tr className="bg-white/5 border-b border-white/10">
                                         <th className="p-5 text-xs font-black uppercase text-gray-500">Nombre</th>
-                                        <th className="p-5 text-xs font-black uppercase text-gray-500">ID</th>
+                                        <th className="p-5 text-xs font-black uppercase text-gray-500">Cédula</th>
+                                        <th className="p-5 text-xs font-black uppercase text-gray-500">PIN</th>
                                         <th className="p-5 text-xs font-black uppercase text-gray-500">Estado</th>
                                         <th className="p-5 text-right text-xs font-black uppercase text-gray-500">Acciones</th>
                                     </tr>
@@ -910,6 +992,7 @@ export default function AdminPage() {
                                     {colaboradores.map((colab) => (
                                         <tr key={colab.id} className="hover:bg-white/[0.02] transition-colors">
                                             <td className="p-5 font-bold uppercase">{colab.nombreCompleto}</td>
+                                            <td className="p-5 font-mono text-gray-300">{colab.id}</td>
                                             <td className="p-5 font-mono text-gray-400">{colab.claveRegistro}</td>
                                             <td className="p-5">
                                                 <button
@@ -2042,6 +2125,132 @@ export default function AdminPage() {
                         )}
                     </>
                 )}
+
+                {/* TAB: ARTICULOS */}
+                {tab === 'articulos' && (
+                    <>
+                        <div className="flex items-center justify-between mb-8">
+                            <h2 className="text-xl font-black uppercase tracking-widest text-emerald-400">Maestro de Artículos y Velocidades</h2>
+                            <button
+                                onClick={() => setShowForm(!showForm)}
+                                className="flex items-center gap-2 bg-emerald-400 hover:bg-emerald-500 text-black px-6 py-3 rounded-xl font-bold transition-all"
+                            >
+                                {showForm ? <X className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+                                {showForm ? "CANCELAR" : "AGREGAR ARTÍCULO"}
+                            </button>
+                        </div>
+
+                        {showForm && (
+                            <form onSubmit={handleAddArticulo} className="glass p-8 rounded-3xl mb-8 border border-emerald-400/30 animate-in fade-in slide-in-from-top-4 duration-300">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-500 uppercase mb-2">Código de Artículo *</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-emerald-400"
+                                            value={newArticuloCodigo}
+                                            onChange={(e) => setNewArticuloCodigo(e.target.value)}
+                                            placeholder="Ej: ART-10293"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-500 uppercase mb-2">Descripción (Nombre del Producto) *</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-emerald-400"
+                                            value={newArticuloDescripcion}
+                                            onChange={(e) => setNewArticuloDescripcion(e.target.value)}
+                                            placeholder="Ej: IBUPROFENO 400MG"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-500 uppercase mb-2">Velocidad Teórica (Unid/Min) *</label>
+                                        <input
+                                            type="number"
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-emerald-400"
+                                            value={newArticuloVelocidad || ''}
+                                            onChange={(e) => setNewArticuloVelocidad(Number(e.target.value))}
+                                            placeholder="Ej: 120"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-500 uppercase mb-2">Línea *</label>
+                                        <select
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-emerald-400 text-white"
+                                            value={newArticuloLinea}
+                                            onChange={(e) => setNewArticuloLinea(e.target.value as any)}
+                                        >
+                                            <option value="Humano" className="bg-black text-white">Humano</option>
+                                            <option value="Veterinario" className="bg-black text-white">Veterinario</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button type="submit" className="mt-6 w-full bg-emerald-400 text-black font-black py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-500 transition-colors">
+                                    <Check className="h-6 w-6" /> GUARDAR EN MAESTRO
+                                </button>
+                            </form>
+                        )}
+
+                        <div className="glass rounded-3xl overflow-hidden border border-white/10">
+                            <table className="w-full text-left">
+                                <thead>
+                                    <tr className="bg-white/5 border-b border-white/10">
+                                        <th className="p-5 text-xs font-black uppercase text-gray-500">Código</th>
+                                        <th className="p-5 text-xs font-black uppercase text-gray-500">Descripción</th>
+                                        <th className="p-5 text-xs font-black uppercase text-gray-500">Vel. Teórica (u/m)</th>
+                                        <th className="p-5 text-xs font-black uppercase text-gray-500">Línea</th>
+                                        <th className="p-5 text-right text-xs font-black uppercase text-gray-500">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {articulos.map((art) => (
+                                        <tr key={art.id} className="hover:bg-white/[0.02] transition-colors">
+                                            <td className="p-5 font-mono text-emerald-400 font-bold uppercase">{art.codigo}</td>
+                                            <td className="p-5 font-bold uppercase">{art.descripcion}</td>
+                                            <td className="p-5 font-mono">{art.velocidadTeorica}</td>
+                                            <td className="p-5">
+                                                <span className={cn(
+                                                    "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border",
+                                                    art.linea === 'Humano' ? "bg-primary-blue/10 border-primary-blue/20 text-primary-blue" : "bg-warning-yellow/10 border-warning-yellow/20 text-warning-yellow"
+                                                )}>
+                                                    {art.linea || 'Humano'}
+                                                </span>
+                                            </td>
+                                            <td className="p-5 text-right space-x-2">
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingItem({ id: art.id, type: 'articulo', data: art });
+                                                        setEditValue({
+                                                            codigo: art.codigo,
+                                                            descripcion: art.descripcion,
+                                                            velocidadTeorica: art.velocidadTeorica,
+                                                            linea: art.linea || 'Humano'
+                                                        });
+                                                    }}
+                                                    className="p-2 hover:bg-white/10 text-gray-400 rounded-lg transition-all"
+                                                    title="Editar Artículo"
+                                                >
+                                                    <Edit2 className="h-5 w-5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(art.id, 'maestro_articulos')}
+                                                    className="p-2 hover:bg-danger-red/20 text-danger-red rounded-lg transition-all"
+                                                    title="Eliminar Artículo"
+                                                >
+                                                    <Trash2 className="h-5 w-5" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {articulos.length === 0 && (
+                                <div className="p-20 text-center text-gray-500 font-bold uppercase tracking-widest text-xs">No hay artículos registrados</div>
+                            )}
+                        </div>
+                    </>
+                )}
             </div>
             {/* MODAL DE EDICIÓN UNIVERSAL */}
             {editingItem && (
@@ -2090,6 +2299,49 @@ export default function AdminPage() {
                                                 value={editValue.mensajeSalida}
                                                 onChange={(e) => setEditValue({ ...editValue, mensajeSalida: e.target.value })}
                                             />
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {editingItem.type === 'articulo' && (
+                                <>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Código de Artículo</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                            value={editValue.codigo}
+                                            onChange={(e) => setEditValue({ ...editValue, codigo: e.target.value.toUpperCase() })}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Descripción</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                            value={editValue.descripcion}
+                                            onChange={(e) => setEditValue({ ...editValue, descripcion: e.target.value.toUpperCase() })}
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Velocidad Teórica</label>
+                                            <input
+                                                type="number"
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                                value={editValue.velocidadTeorica}
+                                                onChange={(e) => setEditValue({ ...editValue, velocidadTeorica: Number(e.target.value) })}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Línea</label>
+                                            <select
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all text-white"
+                                                value={editValue.linea}
+                                                onChange={(e) => setEditValue({ ...editValue, linea: e.target.value })}
+                                            >
+                                                <option value="Humano" className="bg-black text-white">Humano</option>
+                                                <option value="Veterinario" className="bg-black text-white">Veterinario</option>
+                                            </select>
                                         </div>
                                     </div>
                                 </>

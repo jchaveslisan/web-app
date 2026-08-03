@@ -71,7 +71,7 @@ export default function ModalAddColaborador({ procesoId, onClose, currentUser }:
 
     const filtered = maestro.filter(c =>
         c.nombreCompleto.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.claveRegistro.includes(searchTerm)
+        (c.id && c.id.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     return (
@@ -145,7 +145,7 @@ export default function ModalAddColaborador({ procesoId, onClose, currentUser }:
                                                 </span>
                                             )}
                                         </div>
-                                        <p className="text-xs text-gray-500 font-bold font-mono uppercase">ID: {colab.claveRegistro}</p>
+                                        <p className="text-xs text-gray-500 font-bold font-mono uppercase">ID: {colab.id}</p>
                                     </div>
                                     {!estaActivo && <UserPlus className="h-5 w-5 text-gray-700 group-hover:text-primary-blue opacity-0 group-hover:opacity-100 transition-all" />}
                                 </button>

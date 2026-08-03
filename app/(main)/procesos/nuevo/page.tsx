@@ -9,6 +9,7 @@ import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestor
 import { db } from '@/lib/firebase';
 import { useAuthStore } from '@/lib/auth-service';
 import { ColaboradorMaestro, Etapa, OrdenMaestra } from '@/types';
+import { cn } from '@/lib/utils';
 
 export default function NuevoProcesoPage() {
     const router = useRouter();
@@ -18,8 +19,11 @@ export default function NuevoProcesoPage() {
     const [etapas, setEtapas] = useState<Etapa[]>([]);
     const [colaboradores, setColaboradores] = useState<ColaboradorMaestro[]>([]);
     const [ordenesMaestras, setOrdenesMaestras] = useState<OrdenMaestra[]>([]);
+    const [articulos, setArticulos] = useState<any[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [isVelocidadLocked, setIsVelocidadLocked] = useState(false);
+    const [isLineaLocked, setIsLineaLocked] = useState(false);
 
     // Protección de ruta (Solo usuarios autenticados)
     useEffect(() => {
@@ -37,9 +41,18 @@ export default function NuevoProcesoPage() {
     }, []);
 
     useEffect(() => {
-        const q = query(collection(db, 'maestro_etapas'), where('activo', '==', true), orderBy('nombre', 'asc'));
+        const q = query(collection(db, 'maestro_etapas'), orderBy('codigo', 'asc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             setEtapas(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Etapa)));
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Cargar Artículos
+    useEffect(() => {
+        const q = query(collection(db, 'maestro_articulos'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setArticulos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
         return () => unsubscribe();
     }, []);
@@ -127,7 +140,6 @@ export default function NuevoProcesoPage() {
                 </div>
 
                 {tipoProceso === null ? (
-                    // Pregunta inicial con 3 opciones
                     <div className="relative z-10 flex flex-col items-center justify-center min-h-[400px] gap-8">
                         <div className="text-center mb-8">
                             <h2 className="text-4xl font-black mb-4 uppercase tracking-tight">Tipo de Proceso</h2>
@@ -164,7 +176,6 @@ export default function NuevoProcesoPage() {
                         </div>
                     </div>
                 ) : (
-                    // Formulario
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 relative z-10">
                         <div className="flex items-center justify-between mb-6 pb-6 border-b border-white/10">
                             <div className="flex items-center gap-3">
@@ -220,7 +231,23 @@ export default function NuevoProcesoPage() {
                                                                 setValue('lote', o.lote);
                                                                 setValue('etapa', o.etapa);
                                                                 setValue('cantidad', o.cantidad);
-                                                                setValue('velocidad', o.velocidadTeorica);
+                                                                
+                                                                const matchingArt = articulos.find(a => 
+                                                                    (a.descripcion && a.descripcion.trim().toUpperCase() === o.producto.trim().toUpperCase()) ||
+                                                                    (a.codigo && a.codigo.trim().toUpperCase() === o.producto.trim().toUpperCase())
+                                                                );
+                                                                
+                                                                if (matchingArt) {
+                                                                    setValue('velocidad', matchingArt.velocidadTeorica);
+                                                                    setValue('linea', matchingArt.linea || 'Humano');
+                                                                    setIsVelocidadLocked(true);
+                                                                    setIsLineaLocked(true);
+                                                                } else {
+                                                                    setValue('velocidad', o.velocidadTeorica || 0);
+                                                                    setIsVelocidadLocked(false);
+                                                                    setIsLineaLocked(false);
+                                                                }
+                                                                
                                                                 setSearchTerm(`${o.op} - ${o.producto}`);
                                                                 setIsDropdownOpen(false);
                                                             }}
@@ -254,9 +281,7 @@ export default function NuevoProcesoPage() {
                         )}
 
                         {tipoProceso === 'empaque' ? (
-                            // Formulario completo para empaque
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                {/* Columna 1 */}
                                 <div className="space-y-6">
                                     <div>
                                         <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Orden de Producción (OP)</label>
@@ -294,28 +319,19 @@ export default function NuevoProcesoPage() {
                                                 className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary-blue/50 transition-all font-bold text-white"
                                             >
                                                 <option value="" className="bg-black text-white">Seleccionar etapa...</option>
-                                                {etapas.filter(e => !e.tiposProceso || e.tiposProceso.includes('empaque')).length > 0 ? (
-                                                    etapas
-                                                        .filter(e => !e.tiposProceso || e.tiposProceso.includes('empaque'))
-                                                        .map(etapa => (
-                                                            <option key={etapa.id} value={etapa.codigo} className="bg-black text-white">
-                                                                {etapa.codigo} - {etapa.nombre}
-                                                            </option>
-                                                        ))
-                                                ) : (
-                                                    <>
-                                                        <option value="EMP" className="bg-black text-white">EMP - Empaque</option>
-                                                        <option value="FAB" className="bg-black text-white">FAB - Fabricación</option>
-                                                        <option value="SUB" className="bg-black text-white">SUB - Subempaque</option>
-                                                        <option value="GRAN" className="bg-black text-white">GRAN - Granel</option>
-                                                    </>
-                                                )}
+                                                {etapas
+                                                    .filter(e => !e.tiposProceso || e.tiposProceso.includes('empaque'))
+                                                    .map(etapa => (
+                                                        <option key={etapa.id} value={etapa.codigo} className="bg-black text-white">
+                                                            {etapa.codigo} - {etapa.nombre}
+                                                        </option>
+                                                    ))
+                                                }
                                             </select>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Columna 2 */}
                                 <div className="space-y-6">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
@@ -333,7 +349,11 @@ export default function NuevoProcesoPage() {
                                                 type="number"
                                                 step="0.1"
                                                 {...register('velocidad')}
-                                                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary-blue/50 transition-all font-bold text-lg"
+                                                readOnly={isVelocidadLocked}
+                                                className={cn(
+                                                    "w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none transition-all font-bold text-lg",
+                                                    isVelocidadLocked ? "opacity-60 cursor-not-allowed" : "focus:ring-2 focus:ring-primary-blue/50"
+                                                )}
                                             />
                                         </div>
                                     </div>
@@ -365,14 +385,17 @@ export default function NuevoProcesoPage() {
                                     </div>
                                 </div>
 
-                                {/* Nueva fila para linea y fechas */}
                                 <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-white/5">
                                     <div>
                                         <label className="block text-sm font-black uppercase tracking-widest text-gray-500 mb-2">Línea</label>
                                         <select
                                             {...register('linea')}
                                             defaultValue="Humano"
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary-blue/50 transition-all font-bold text-white"
+                                            className={cn(
+                                                "w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none transition-all font-bold text-white",
+                                                isLineaLocked ? "pointer-events-none opacity-60 cursor-not-allowed" : "focus:ring-2 focus:ring-primary-blue/50"
+                                            )}
+                                            tabIndex={isLineaLocked ? -1 : undefined}
                                         >
                                             <option value="Humano" className="bg-black text-white">Humano</option>
                                             <option value="Veterinario" className="bg-black text-white">Veterinario</option>
@@ -464,7 +487,11 @@ export default function NuevoProcesoPage() {
                                         <select
                                             {...register('linea')}
                                             defaultValue="Humano"
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-warning-yellow/50 transition-all font-bold text-white"
+                                            className={cn(
+                                                "w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none transition-all font-bold text-white",
+                                                isLineaLocked ? "pointer-events-none opacity-60 cursor-not-allowed" : "focus:ring-2 focus:ring-warning-yellow/50"
+                                            )}
+                                            tabIndex={isLineaLocked ? -1 : undefined}
                                         >
                                             <option value="Humano" className="bg-black text-white">Humano</option>
                                             <option value="Veterinario" className="bg-black text-white">Veterinario</option>

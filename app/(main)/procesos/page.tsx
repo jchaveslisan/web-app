@@ -16,14 +16,15 @@ import {
     Share2,
     Check,
     X,
-    Users as UsersIcon
+    Users as UsersIcon,
+    Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Proceso, ProcesoEstado, TipoProceso } from '@/types';
 import { useProcesos } from '@/hooks/useProcesos';
 import { useAuthStore } from '@/lib/auth-service';
 import { differenceInSeconds, addSeconds } from 'date-fns';
-import { collection, query, where, onSnapshot, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { User as SystemUser } from '@/types';
 
@@ -161,6 +162,16 @@ export default function ProcesosPage() {
             console.error("Error updating visibility:", error);
         } finally {
             setIsSavingShare(false);
+        }
+    };
+
+    const handleDeleteProceso = async (id: string, op: string) => {
+        if (!confirm(`¿Está seguro de que desea eliminar el proceso de la OP ${op || 'N/A'} de forma permanente?`)) return;
+        try {
+            await deleteDoc(doc(db, 'procesos', id));
+        } catch (error) {
+            console.error('Error al eliminar proceso:', error);
+            alert('Error al eliminar el proceso de la base de datos.');
         }
     };
 
@@ -456,7 +467,7 @@ export default function ProcesosPage() {
                                         </thead>
                                         <tbody className="divide-y divide-white/5">
                                             {allColaboradores
-                                                .filter(c => c.nombreCompleto.toLowerCase().includes(searchTerm.toLowerCase()) || c.claveRegistro.includes(searchTerm))
+                                                .filter(c => c.nombreCompleto.toLowerCase().includes(searchTerm.toLowerCase()) || (c.id && c.id.toLowerCase().includes(searchTerm.toLowerCase())))
                                                 .sort((a, b) => {
                                                     const logA = activeLogs.find(l => l.colaboradorId === a.id);
                                                     const procA = logA ? procesos.find(p => p.id === logA.procesoId) : null;
@@ -486,7 +497,7 @@ export default function ProcesosPage() {
                                                                 </div>
                                                             </td>
                                                             <td className="p-5">
-                                                                <span className="text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase">{colab.claveRegistro}</span>
+                                                                <span className="text-[10px] font-black text-gray-500 tracking-[0.2em] uppercase">{colab.id}</span>
                                                             </td>
                                                             <td className="p-5">
                                                                 {isTrulyInLine ? (
@@ -637,6 +648,15 @@ export default function ProcesosPage() {
                                                                 </div>
                                                             </td>
                                                             <td className="p-5 text-right flex items-center justify-end gap-2">
+                                                                {['superadmin', 'supervisor'].includes(user?.rol || '') && proceso.estado === 'Registrado' && (
+                                                                    <button
+                                                                        onClick={() => handleDeleteProceso(proceso.id, proceso.ordenProduccion)}
+                                                                        className="p-2 bg-white/5 hover:bg-danger-red/10 rounded-lg text-gray-400 hover:text-danger-red transition-all"
+                                                                        title="Eliminar Proceso"
+                                                                    >
+                                                                        <Trash2 className="h-5 w-5" />
+                                                                    </button>
+                                                                )}
                                                                 {['superadmin', 'supervisor'].includes(user?.rol || '') && (
                                                                     <button
                                                                         onClick={() => setSharingProceso(proceso)}
