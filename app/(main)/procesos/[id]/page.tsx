@@ -978,7 +978,7 @@ export default function MonitoreoPage() {
                                 <div className="flex gap-3 items-stretch">
                                     <div className="relative flex-1">
                                         <input
-                                            type="text"
+                                            type="password"
                                             placeholder={proceso.estado === 'Finalizado' ? "CERRADO" : "ESCANEAR ID..."}
                                             value={staffCode}
                                             onChange={(e) => setStaffCode(e.target.value.toUpperCase())}

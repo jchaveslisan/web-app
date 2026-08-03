@@ -166,7 +166,7 @@ export default function ModalAddComentario({ proceso, colaboradores, onClose, on
                   <div className="relative">
                     <input
                       ref={pinInputRef}
-                      type="text"
+                      type="password"
                       pattern="[0-9]*"
                       inputMode="numeric"
                       value={pin}
