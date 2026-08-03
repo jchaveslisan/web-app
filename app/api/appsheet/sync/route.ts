@@ -82,6 +82,7 @@ export async function POST() {
                 cantidad: Number(row['CANT TEORICA']) || 0,
                 velocidadTeorica: 0,
                 activo: true,
+                articulo: String(row['ARTICULO'] || '').trim().toUpperCase(),
                 importadoDeAppSheet: true,
                 fechaSincro: new Date().toISOString()
             });

@@ -85,6 +85,7 @@ export default function AdminPage() {
     const [newOrderEtapa, setNewOrderEtapa] = useState('');
     const [newOrderCantidad, setNewOrderCantidad] = useState(0);
     const [newOrderVelocidad, setNewOrderVelocidad] = useState(0);
+    const [newOrderArticulo, setNewOrderArticulo] = useState('');
     const [isSyncing, setIsSyncing] = useState(false);
 
     // For editing
@@ -182,6 +183,7 @@ export default function AdminPage() {
                 etapa: newOrderEtapa,
                 cantidad: newOrderCantidad,
                 velocidadTeorica: newOrderVelocidad,
+                articulo: newOrderArticulo.trim().toUpperCase(),
                 activo: true
             });
             setNewOrderOP('');
@@ -190,6 +192,7 @@ export default function AdminPage() {
             setNewOrderEtapa('');
             setNewOrderCantidad(0);
             setNewOrderVelocidad(0);
+            setNewOrderArticulo('');
             setShowForm(false);
         } catch (error) {
             console.error(error);
@@ -1521,7 +1524,7 @@ export default function AdminPage() {
 
                         {showForm && (
                             <form onSubmit={handleAddOrder} className="glass p-8 rounded-[2.5rem] mb-8 border border-primary-blue/30 animate-in fade-in slide-in-from-top-4 duration-300">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                                     <div className="md:col-span-1">
                                         <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Orden de Producción (OP)</label>
                                         <input
@@ -1530,6 +1533,15 @@ export default function AdminPage() {
                                             onChange={(e) => setNewOrderOP(e.target.value)}
                                             placeholder="Ej: OP-2024-001"
                                             required
+                                        />
+                                    </div>
+                                    <div className="md:col-span-1">
+                                        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Código de Artículo</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-5 font-bold focus:ring-2 focus:ring-primary-blue outline-none transition-all"
+                                            value={newOrderArticulo}
+                                            onChange={(e) => setNewOrderArticulo(e.target.value)}
+                                            placeholder="Ej: ART-001"
                                         />
                                     </div>
                                     <div className="md:col-span-2">
@@ -1604,7 +1616,9 @@ export default function AdminPage() {
                                             <tr key={o.id} className="hover:bg-white/[0.02] transition-colors group">
                                                 <td className="p-6">
                                                     <span className="font-black text-primary-blue text-lg tracking-tight">{o.op}</span>
-                                                    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Lote: {o.lote || 'N/A'}</div>
+                                                    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">
+                                                        Lote: {o.lote || 'N/A'}{o.articulo && ` | Art: ${o.articulo}`}
+                                                    </div>
                                                 </td>
                                                 <td className="p-6">
                                                     <div className="font-bold text-white uppercase">{o.producto}</div>
@@ -2511,13 +2525,23 @@ export default function AdminPage() {
                                             />
                                         </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Producto</label>
-                                        <input
-                                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:ring-2 focus:ring-primary-blue transition-all"
-                                            value={editValue.producto}
-                                            onChange={(e) => setEditValue({ ...editValue, producto: e.target.value })}
-                                        />
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="md:col-span-1 space-y-2">
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Código de Artículo</label>
+                                            <input
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:ring-2 focus:ring-primary-blue transition-all font-mono"
+                                                value={editValue.articulo || ''}
+                                                onChange={(e) => setEditValue({ ...editValue, articulo: e.target.value.toUpperCase() })}
+                                            />
+                                        </div>
+                                        <div className="md:col-span-2 space-y-2">
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Producto</label>
+                                            <input
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:ring-2 focus:ring-primary-blue transition-all"
+                                                value={editValue.producto}
+                                                onChange={(e) => setEditValue({ ...editValue, producto: e.target.value })}
+                                            />
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">

@@ -27,6 +27,7 @@ export interface Proceso {
     ordenProduccion: string;
     lote: string;
     producto: string;
+    articulo?: string;
     etapa: string;
     fechaExpira: string;
     fechaFabricacion: string;
@@ -110,6 +111,7 @@ export interface OrdenMaestra {
     cantidad: number;
     velocidadTeorica: number;
     activo: boolean;
+    articulo?: string;
 }
 
 export interface Comentario {
