@@ -716,11 +716,36 @@ export default function AdminPage() {
                 case 'articulo': collectionName = 'maestro_articulos'; break;
             }
 
-            await updateDoc(doc(db, collectionName, editingItem.id), editValue);
+            if (editingItem.type === 'personal' && editValue.id && editValue.id.trim() !== editingItem.id) {
+                const newId = editValue.id.trim();
+                const docRef = doc(db, 'maestro_colaboradores', newId);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    alert(`Ya existe un colaborador registrado con la identificación ${newId}.`);
+                    return;
+                }
+
+                // Crear nuevo documento con el nuevo ID (Cédula)
+                await setDoc(docRef, {
+                    nombreCompleto: editValue.nombreCompleto.toUpperCase().trim(),
+                    claveRegistro: editValue.claveRegistro.trim(),
+                    mensajeEntrada: editValue.mensajeEntrada || null,
+                    mensajeSalida: editValue.mensajeSalida || null,
+                    activo: editValue.activo !== undefined ? editValue.activo : true
+                });
+
+                // Eliminar el documento anterior
+                await deleteDoc(doc(db, 'maestro_colaboradores', editingItem.id));
+            } else {
+                const { id, ...cleanValue } = editValue;
+                await updateDoc(doc(db, collectionName, editingItem.id), cleanValue);
+            }
+
             setEditingItem(null);
             setEditValue({});
         } catch (error) {
             console.error(error);
+            alert("Error al guardar los cambios.");
         }
     };
 
@@ -1017,6 +1042,7 @@ export default function AdminPage() {
                                                     onClick={() => {
                                                         setEditingItem({ id: colab.id, type: 'personal', data: colab });
                                                         setEditValue({
+                                                            id: colab.id,
                                                             nombreCompleto: colab.nombreCompleto,
                                                             claveRegistro: colab.claveRegistro,
                                                             mensajeEntrada: colab.mensajeEntrada || '',
@@ -2266,19 +2292,29 @@ export default function AdminPage() {
                         </div>
                         <div className="p-8 space-y-6 overflow-auto max-h-[70vh]">
                             {editingItem.type === 'personal' && (
-                                <>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Nombre Completo</label>
-                                        <input
-                                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
-                                            value={editValue.nombreCompleto}
-                                            onChange={(e) => setEditValue({ ...editValue, nombreCompleto: e.target.value.toUpperCase() })}
-                                        />
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Nombre Completo</label>
+                                            <input
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                                value={editValue.nombreCompleto}
+                                                onChange={(e) => setEditValue({ ...editValue, nombreCompleto: e.target.value.toUpperCase() })}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Cédula / Identificación</label>
+                                            <input
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all font-mono"
+                                                value={editValue.id}
+                                                onChange={(e) => setEditValue({ ...editValue, id: e.target.value.trim() })}
+                                            />
+                                        </div>
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">ID / Código</label>
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">PIN / Clave de Registro</label>
                                         <input
-                                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all font-mono"
                                             value={editValue.claveRegistro}
                                             onChange={(e) => setEditValue({ ...editValue, claveRegistro: e.target.value })}
                                         />
@@ -2301,7 +2337,7 @@ export default function AdminPage() {
                                             />
                                         </div>
                                     </div>
-                                </>
+                                </div>
                             )}
 
                             {editingItem.type === 'articulo' && (
