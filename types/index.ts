@@ -114,6 +114,15 @@ export interface OrdenMaestra {
     articulo?: string;
 }
 
+export interface CorreccionComentario {
+    comentarioAnterior: string;
+    comentarioNuevo: string;
+    fechaCorreccion: any; // Firestore Timestamp
+    colaboradorId: string;
+    nombreColaborador: string;
+    motivo: string;
+}
+
 export interface Comentario {
     id: string;
     procesoId: string;
@@ -124,5 +133,12 @@ export interface Comentario {
     ordenProduccion: string;
     etapa: string;
     producto: string;
+    correcciones?: CorreccionComentario[];
+}
+
+export interface MotivoCorreccion {
+    id: string;
+    texto: string;
+    activo: boolean;
 }
 

@@ -14,7 +14,8 @@ import {
     addDoc,
     serverTimestamp,
     deleteDoc,
-    writeBatch
+    writeBatch,
+    arrayUnion
 } from 'firebase/firestore';
 
 export {
@@ -33,11 +34,12 @@ export {
     addDoc,
     serverTimestamp,
     deleteDoc,
-    writeBatch
+    writeBatch,
+    arrayUnion
 };
 import { db } from './firebase';
 export { db };
-import { Proceso, ColaboradorLog, EventoLog, User, ColaboradorMaestro, Justificacion, Etapa, OrdenMaestra, Comentario } from '@/types';
+import { Proceso, ColaboradorLog, EventoLog, User, ColaboradorMaestro, Justificacion, Etapa, OrdenMaestra, Comentario, MotivoCorreccion } from '@/types';
 
 // --- USUARIOS ---
 export const getUsuario = async (uid: string): Promise<User | null> => {
@@ -530,6 +532,37 @@ export const getComentariosByOP = async (op: string): Promise<Comentario[]> => {
 
 export const deleteComentario = async (id: string): Promise<void> => {
     await deleteDoc(doc(db, 'comentarios', id));
+};
+
+export const correctComentario = async (
+    comentarioId: string,
+    colaboradorId: string,
+    nombreColaborador: string,
+    comentarioAnterior: string,
+    comentarioNuevo: string,
+    motivo: string
+): Promise<void> => {
+    const docRef = doc(db, 'comentarios', comentarioId);
+    const now = Timestamp.now();
+    const nuevaCorreccion = {
+        comentarioAnterior,
+        comentarioNuevo,
+        fechaCorreccion: now,
+        colaboradorId,
+        nombreColaborador,
+        motivo
+    };
+    
+    await updateDoc(docRef, {
+        comentario: comentarioNuevo,
+        correcciones: arrayUnion(nuevaCorreccion)
+    });
+};
+
+export const getMotivosCorreccion = async (): Promise<MotivoCorreccion[]> => {
+    const q = query(collection(db, 'maestro_motivos_correccion'), where('activo', '==', true));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MotivoCorreccion));
 };
 
 

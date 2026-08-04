@@ -24,6 +24,7 @@ export default function NuevoProcesoPage() {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isVelocidadLocked, setIsVelocidadLocked] = useState(false);
     const [isLineaLocked, setIsLineaLocked] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Protección de ruta (Solo usuarios autenticados)
     useEffect(() => {
@@ -69,12 +70,14 @@ export default function NuevoProcesoPage() {
     }, []);
 
     const onSubmit = async (data: any) => {
+        if (isSubmitting) return;
         if (tipoProceso === 'empaque' || tipoProceso === 'otros') {
             if (!data.op || !data.producto || !data.lote) {
                 alert("Debe seleccionar una Orden de Producción válida utilizando el buscador superior.");
                 return;
             }
         }
+        setIsSubmitting(true);
         try {
             const procesoId = await createProceso({
                 ordenProduccion: tipoProceso === 'empaque' || tipoProceso === 'otros' ? data.op : 'N/A',
@@ -106,6 +109,7 @@ export default function NuevoProcesoPage() {
         } catch (error) {
             console.error('Error al crear proceso:', error);
             alert('Hubo un error al guardar el proceso en Firebase');
+            setIsSubmitting(false);
         }
     };
 
@@ -570,10 +574,25 @@ export default function NuevoProcesoPage() {
                         <div className="pt-8 flex justify-end">
                             <button
                                 type="submit"
-                                className="flex items-center gap-3 bg-primary-blue hover:bg-blue-600 px-10 py-4 rounded-2xl font-black text-lg transition-all shadow-xl shadow-primary-blue/20 transform hover:scale-105 active:scale-95"
+                                disabled={isSubmitting}
+                                className={cn(
+                                    "flex items-center gap-3 bg-primary-blue px-10 py-4 rounded-2xl font-black text-lg transition-all shadow-xl shadow-primary-blue/20",
+                                    isSubmitting 
+                                        ? "opacity-50 cursor-not-allowed" 
+                                        : "hover:bg-blue-600 transform hover:scale-105 active:scale-95"
+                                )}
                             >
-                                <Save className="h-6 w-6" />
-                                REGISTRAR PROCESO
+                                {isSubmitting ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+                                        REGISTRANDO...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save className="h-6 w-6" />
+                                        REGISTRAR PROCESO
+                                    </>
+                                )}
                             </button>
                         </div>
                     </form>

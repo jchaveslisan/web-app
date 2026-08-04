@@ -32,11 +32,12 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/auth-service';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, where, getDocs, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { getComentariosByOP, deleteComentario } from '@/lib/firebase-db';
-import { ColaboradorMaestro, Justificacion, Etapa, User, UserRole, OrdenMaestra } from '@/types';
+import { getComentariosByOP, deleteComentario, correctComentario } from '@/lib/firebase-db';
+import ModalCorregirComentario from '@/components/proceso/ModalCorregirComentario';
+import { ColaboradorMaestro, Justificacion, Etapa, User, UserRole, OrdenMaestra, MotivoCorreccion } from '@/types';
 
 export default function AdminPage() {
-    const [tab, setTab] = useState<'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios' | 'ordenes' | 'reportes' | 'resumen' | 'articulos' | 'reporteFechas'>('personal');
+    const [tab, setTab] = useState<'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios' | 'ordenes' | 'reportes' | 'resumen' | 'articulos' | 'reporteFechas' | 'motivosCorreccion'>('personal');
     
     // Date Range Report States
     const [reportStartDate, setReportStartDate] = useState('');
@@ -80,6 +81,9 @@ export default function AdminPage() {
     const [newEtapaNombre, setNewEtapaNombre] = useState('');
     const [newEtapaTipos, setNewEtapaTipos] = useState<string[]>(['empaque', 'otros', 'anexos']);
     const [editingItem, setEditingItem] = useState<{ id: string, type: string, data: any } | null>(null);
+    const [correctionModal, setCorrectionModal] = useState<{ show: boolean; comentarioId: string; comentarioActual: string } | null>(null);
+    const [motivosCorreccion, setMotivosCorreccion] = useState<MotivoCorreccion[]>([]);
+    const [newMotivoCorreccionTexto, setNewMotivoCorreccionTexto] = useState('');
     const router = useRouter();
 
     // Form states for adding
@@ -120,6 +124,16 @@ export default function AdminPage() {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ColaboradorMaestro));
             setColaboradores(data);
             setLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Cargar motivos de corrección
+    useEffect(() => {
+        const q = query(collection(db, 'maestro_motivos_correccion'), orderBy('texto', 'asc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MotivoCorreccion));
+            setMotivosCorreccion(data);
         });
         return () => unsubscribe();
     }, []);
@@ -528,12 +542,21 @@ export default function AdminPage() {
                 autoTable(doc, {
                     startY: 30,
                     head: [['Hora', 'Etapa', 'Colaborador', 'Observación / Comentario']],
-                    body: coms.map(com => [
-                        com.creadoEn ? format(com.creadoEn.toDate(), 'dd/MM/yyyy HH:mm:ss') : '-',
-                        com.etapa || '-',
-                        `${com.nombreColaborador} (${com.colaboradorId})`,
-                        com.comentario
-                    ]),
+                    body: coms.map(com => {
+                        let text = com.comentario;
+                        if (com.correcciones && com.correcciones.length > 0) {
+                            const history = com.correcciones.map((c: any) => 
+                                `[ANTERIOR: "${c.comentarioAnterior}" (Corregido por ${c.nombreColaborador} el ${format(c.fechaCorreccion.toDate(), 'dd/MM/yyyy HH:mm:ss')} | Motivo: ${c.motivo || 'N/E'})]`
+                            ).join('\n');
+                            text = `${history}\nACTUAL: "${com.comentario}"`;
+                        }
+                        return [
+                            com.creadoEn ? format(com.creadoEn.toDate(), 'dd/MM/yyyy HH:mm:ss') : '-',
+                            com.etapa || '-',
+                            `${com.nombreColaborador} (${com.colaboradorId})`,
+                            text
+                        ];
+                    }),
                     styles: { fontSize: 8 },
                     headStyles: { fillColor: [30, 41, 59] }
                 });
@@ -782,13 +805,22 @@ export default function AdminPage() {
                 return timeB - timeA;
             });
 
-            const commentsBody = sortedComments.map(com => [
-                com.nombreColaborador || 'Desconocido',
-                com.creadoEn ? format(com.creadoEn.toDate(), 'dd/MM/yyyy HH:mm:ss') : '-',
-                com.etapa || 'N/A',
-                com.ordenProduccion || 'N/A',
-                com.comentario || ''
-            ]);
+            const commentsBody = sortedComments.map(com => {
+                let text = com.comentario || '';
+                if (com.correcciones && com.correcciones.length > 0) {
+                    const history = com.correcciones.map((c: any) => 
+                        `[ANTERIOR: "${c.comentarioAnterior}" (Corregido por ${c.nombreColaborador} el ${format(c.fechaCorreccion.toDate(), 'dd/MM/yyyy HH:mm:ss')} | Motivo: ${c.motivo || 'N/E'})]`
+                    ).join('\n');
+                    text = `${history}\nACTUAL: "${com.comentario}"`;
+                }
+                return [
+                    com.nombreColaborador || 'Desconocido',
+                    com.creadoEn ? format(com.creadoEn.toDate(), 'dd/MM/yyyy HH:mm:ss') : '-',
+                    com.etapa || 'N/A',
+                    com.ordenProduccion || 'N/A',
+                    text
+                ];
+            });
 
             autoTable(doc, {
                 startY: 30,
@@ -976,6 +1008,22 @@ export default function AdminPage() {
         }
     };
 
+    const handleAddMotivoCorreccion = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newMotivoCorreccionTexto.trim()) return;
+        try {
+            await addDoc(collection(db, 'maestro_motivos_correccion'), {
+                texto: newMotivoCorreccionTexto.trim(),
+                activo: true
+            });
+            setNewMotivoCorreccionTexto('');
+            setShowForm(false);
+        } catch (error) {
+            console.error(error);
+            alert("Error al agregar motivo de corrección");
+        }
+    };
+
     const handleSaveEdit = async () => {
         if (!editingItem) return;
         try {
@@ -988,6 +1036,7 @@ export default function AdminPage() {
                 case 'usuario': collectionName = 'usuarios'; break;
                 case 'orden': collectionName = 'maestro_ordenes'; break;
                 case 'articulo': collectionName = 'maestro_articulos'; break;
+                case 'motivoCorreccion': collectionName = 'maestro_motivos_correccion'; break;
             }
 
             if (editingItem.type === 'personal' && editValue.id && editValue.id.trim() !== editingItem.id) {
@@ -1171,6 +1220,17 @@ export default function AdminPage() {
                     )}
                 >
                     <TrendingUp className="h-5 w-5" /> Reporte de Planta
+                </button>
+                <button
+                    onClick={() => { setTab('motivosCorreccion'); setShowForm(false); }}
+                    className={cn(
+                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
+                        tab === 'motivosCorreccion'
+                            ? "border-warning-yellow text-warning-yellow"
+                            : "border-transparent text-gray-400 hover:text-white"
+                    )}
+                >
+                    <Settings className="h-5 w-5" /> Motivos Corrección
                 </button>
                 <button
                     onClick={() => { setTab('articulos'); setShowForm(false); }}
@@ -2225,24 +2285,27 @@ export default function AdminPage() {
                                                                         {com.creadoEn ? format((com.creadoEn as any).toDate(), 'dd/MM/yyyy HH:mm:ss') : 'Reciente'}
                                                                     </span>
                                                                 </div>
-                                                                <p className="text-sm text-gray-200 font-medium leading-relaxed italic">"{com.comentario}"</p>
+                                                                <div className="space-y-1">
+                                                                    {com.correcciones && com.correcciones.map((corr: any, idx: number) => (
+                                                                        <div key={idx} className="text-xs text-gray-500 line-through leading-relaxed italic opacity-40">
+                                                                            "{corr.comentarioAnterior}"
+                                                                        </div>
+                                                                    ))}
+                                                                    <p className="text-sm text-gray-200 font-medium leading-relaxed italic">"{com.comentario}"</p>
+                                                                    {com.correcciones && com.correcciones.length > 0 && (
+                                                                        <p className="text-[9px] text-warning-yellow font-black uppercase tracking-[0.2em] mt-0.5">
+                                                                            Última corrección por: {com.correcciones[com.correcciones.length - 1].nombreColaborador} (ID: {com.correcciones[com.correcciones.length - 1].colaboradorId}) • Motivo: {com.correcciones[com.correcciones.length - 1].motivo}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
                                                                 <p className="text-[10px] text-gray-600 font-bold uppercase mt-1 tracking-tighter">Registrado por: {com.nombreColaborador} (PIN/ID: {com.colaboradorId})</p>
                                                             </div>
                                                             <button
-                                                                onClick={async () => {
-                                                                    if (confirm('¿Eliminar esta observación permanentemente?')) {
-                                                                        try {
-                                                                            await deleteComentario(com.id);
-                                                                        } catch (e) {
-                                                                            console.error(e);
-                                                                            alert('Error al eliminar observación.');
-                                                                        }
-                                                                    }
-                                                                }}
-                                                                className="p-2 hover:bg-danger-red/10 text-danger-red rounded-xl transition-all ml-4 shrink-0"
-                                                                title="Eliminar comentario"
+                                                                onClick={() => setCorrectionModal({ show: true, comentarioId: com.id, comentarioActual: com.comentario })}
+                                                                className="p-2 hover:bg-warning-yellow/10 text-warning-yellow rounded-xl transition-all ml-4 shrink-0"
+                                                                title="Corregir comentario (Audit Trail)"
                                                             >
-                                                                <Trash2 className="h-5 w-5" />
+                                                                <Edit2 className="h-5 w-5" />
                                                             </button>
                                                         </div>
                                                     ))}
@@ -2809,8 +2872,20 @@ export default function AdminPage() {
                                                                 <span>{com.nombreColaborador} (ID: {com.colaboradorId})</span>
                                                                 <span>{com.creadoEn ? format(com.creadoEn.toDate(), 'dd/MM/yyyy HH:mm:ss') : 'Reciente'}</span>
                                                             </div>
-                                                            <p className="text-sm font-bold text-white">"{com.comentario}"</p>
-                                                            <div className="flex gap-4 text-[9px] font-bold text-gray-500 uppercase">
+                                                            <div className="space-y-1">
+                                                                {com.correcciones && com.correcciones.map((corr: any, idx: number) => (
+                                                                    <div key={idx} className="text-xs text-gray-500 line-through leading-relaxed italic opacity-40">
+                                                                        "{corr.comentarioAnterior}"
+                                                                    </div>
+                                                                ))}
+                                                                <p className="text-sm font-bold text-white">"{com.comentario}"</p>
+                                                                {com.correcciones && com.correcciones.length > 0 && (
+                                                                    <p className="text-[9px] text-warning-yellow font-black uppercase tracking-[0.2em] mt-0.5">
+                                                                        Última corrección por: {com.correcciones[com.correcciones.length - 1].nombreColaborador} (ID: {com.correcciones[com.correcciones.length - 1].colaboradorId}) • Motivo: {com.correcciones[com.correcciones.length - 1].motivo}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex gap-4 text-[9px] font-bold text-gray-500 uppercase mt-1">
                                                                 <span>OP: {com.ordenProduccion}</span>
                                                                 <span>Etapa: {com.etapa}</span>
                                                             </div>
@@ -2823,6 +2898,104 @@ export default function AdminPage() {
                                 </div>
                             );
                         })()}
+                    </>
+                )}
+
+                {/* TAB: MOTIVOS DE CORRECCIÓN */}
+                {tab === 'motivosCorreccion' && (
+                    <>
+                        <div className="flex items-center justify-between mb-8">
+                            <h2 className="text-xl font-black uppercase tracking-widest text-warning-yellow">Maestro de Motivos de Corrección</h2>
+                            <button
+                                onClick={() => setShowForm(!showForm)}
+                                className="flex items-center gap-2 bg-warning-yellow hover:bg-yellow-600 text-black px-6 py-3 rounded-xl font-bold transition-all"
+                            >
+                                {showForm ? <X className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+                                {showForm ? "CANCELAR" : "AGREGAR MOTIVO"}
+                            </button>
+                        </div>
+
+                        {showForm && (
+                            <form onSubmit={handleAddMotivoCorreccion} className="glass p-8 rounded-3xl mb-8 border border-warning-yellow/30 animate-in fade-in slide-in-from-top-4 duration-300">
+                                <div className="space-y-6">
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-500 uppercase mb-2">Texto / Descripción del Motivo *</label>
+                                        <input
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-warning-yellow"
+                                            value={newMotivoCorreccionTexto}
+                                            onChange={(e) => setNewMotivoCorreccionTexto(e.target.value)}
+                                            placeholder="Ej: Error de digitación, Información incompleta, etc."
+                                            required
+                                        />
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <button
+                                            type="submit"
+                                            className="bg-warning-yellow hover:bg-yellow-600 text-black px-8 py-3 rounded-xl font-bold transition-all"
+                                        >
+                                            GUARDAR MOTIVO
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        )}
+
+                        <div className="glass rounded-3xl overflow-hidden border border-white/10 bg-white/5">
+                            <table className="w-full text-left text-sm">
+                                <thead>
+                                    <tr className="bg-white/5 border-b border-white/10 text-xs font-black uppercase text-gray-500 tracking-wider">
+                                        <th className="p-4">Motivo / Descripción</th>
+                                        <th className="p-4 text-center">Estado</th>
+                                        <th className="p-4 text-right">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5 text-gray-300">
+                                    {motivosCorreccion.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={3} className="p-8 text-center text-gray-500 italic">No hay motivos de corrección registrados</td>
+                                        </tr>
+                                    ) : (
+                                        motivosCorreccion.map(mot => (
+                                            <tr key={mot.id} className="hover:bg-white/[0.01]">
+                                                <td className="p-4 font-bold text-white uppercase">{mot.texto}</td>
+                                                <td className="p-4 text-center">
+                                                    <button
+                                                        onClick={() => handleToggleActivo(mot.id, mot.activo, 'maestro_motivos_correccion')}
+                                                        className={cn(
+                                                            "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border transition-all",
+                                                            mot.activo
+                                                                ? "bg-success-green/10 border-success-green/20 text-success-green hover:bg-success-green/20"
+                                                                : "bg-danger-red/10 border-danger-red/20 text-danger-red hover:bg-danger-red/20"
+                                                        )}
+                                                    >
+                                                        {mot.activo ? "Activo" : "Inactivo"}
+                                                    </button>
+                                                </td>
+                                                <td className="p-4 text-right">
+                                                    <div className="flex gap-2 justify-end">
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingItem({ id: mot.id, type: 'motivoCorreccion', data: mot });
+                                                                setEditValue(mot);
+                                                            }}
+                                                            className="p-2 hover:bg-white/5 rounded-lg text-gray-400 hover:text-white transition-all"
+                                                        >
+                                                            <Edit2 className="h-4 w-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(mot.id, 'maestro_motivos_correccion')}
+                                                            className="p-2 hover:bg-danger-red/10 rounded-lg text-danger-red transition-all"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </>
                 )}
 
@@ -3122,6 +3295,17 @@ export default function AdminPage() {
                                 </>
                             )}
 
+                            {editingItem.type === 'motivoCorreccion' && (
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Texto del Motivo de Corrección</label>
+                                    <input
+                                        className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 font-bold outline-none focus:border-primary-blue transition-all"
+                                        value={editValue.texto}
+                                        onChange={(e) => setEditValue({ ...editValue, texto: e.target.value })}
+                                    />
+                                </div>
+                            )}
+
                             {editingItem.type === 'usuario' && (
                                 <>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -3287,6 +3471,14 @@ export default function AdminPage() {
                         </div>
                     </div>
                 </div>
+            )}
+            {correctionModal && correctionModal.show && (
+                <ModalCorregirComentario
+                    comentarioId={correctionModal.comentarioId}
+                    comentarioActual={correctionModal.comentarioActual}
+                    onClose={() => setCorrectionModal(null)}
+                    onSuccess={(msg) => alert(msg)}
+                />
             )}
         </div >
     );

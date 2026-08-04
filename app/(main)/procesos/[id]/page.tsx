@@ -35,6 +35,7 @@ import ModalJustificacion from '@/components/proceso/ModalJustificacion';
 import ModalBulkExit from '@/components/proceso/ModalBulkExit';
 import ModalEditarProceso from '@/components/proceso/ModalEditarProceso';
 import ModalAddComentario from '@/components/proceso/ModalAddComentario';
+import ModalCorregirComentario from '@/components/proceso/ModalCorregirComentario';
 import { doc, Timestamp, increment } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { calculateProductivity, ProductivityStats, formatSeconds } from '@/lib/productivity-utils';
@@ -121,6 +122,7 @@ export default function MonitoreoPage() {
     const [comentarios, setComentarios] = useState<Comentario[]>([]);
     const [eventsModalTab, setEventsModalTab] = useState<'eventos' | 'comentarios'>('eventos');
     const [showEditModal, setShowEditModal] = useState(false);
+    const [correctionModal, setCorrectionModal] = useState<{ show: boolean; comentarioId: string; comentarioActual: string } | null>(null);
 
     // Sincronizar unidades calculadas con el valor de la base de datos cuando cambia
     useEffect(() => {
@@ -1439,12 +1441,35 @@ export default function MonitoreoPage() {
                                                     <p className="text-xs font-black text-primary-blue uppercase tracking-widest">
                                                         {com.creadoEn ? format((com.creadoEn as any).toDate(), 'dd/MM/yyyy HH:mm:ss') : 'Reciente'}
                                                     </p>
-                                                    <span className="text-[10px] font-bold text-gray-500 bg-white/5 px-2 py-1 rounded-lg">
-                                                        OBSERVACIÓN
-                                                    </span>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-[10px] font-bold text-gray-500 bg-white/5 px-2 py-1 rounded-lg">
+                                                            OBSERVACIÓN
+                                                        </span>
+                                                        {proceso.estado !== 'Finalizado' && (
+                                                            <button
+                                                                onClick={() => setCorrectionModal({ show: true, comentarioId: com.id, comentarioActual: com.comentario })}
+                                                                className="p-1 hover:bg-white/10 text-gray-400 hover:text-warning-yellow rounded transition-colors"
+                                                                title="Corregir observación (Audit Trail)"
+                                                            >
+                                                                <Edit2 className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <p className="text-lg font-black text-gray-100 mb-1 leading-relaxed">"{com.comentario}"</p>
-                                                <p className="text-[10px] text-gray-600 font-bold mt-4 uppercase tracking-tighter">Por: {com.nombreColaborador} (ID: {com.colaboradorId})</p>
+                                                <div className="space-y-1.5 mb-1">
+                                                    {com.correcciones && com.correcciones.map((corr, idx) => (
+                                                        <div key={idx} className="text-sm text-gray-500 line-through leading-relaxed italic opacity-40">
+                                                            "{corr.comentarioAnterior}"
+                                                        </div>
+                                                    ))}
+                                                    <p className="text-lg font-black text-gray-100 leading-relaxed">"{com.comentario}"</p>
+                                                    {com.correcciones && com.correcciones.length > 0 && (
+                                                        <p className="text-[9px] text-warning-yellow font-black uppercase tracking-[0.2em] mt-0.5">
+                                                            Corregido por: {com.correcciones[com.correcciones.length - 1].nombreColaborador} (ID: {com.correcciones[com.correcciones.length - 1].colaboradorId}) • Motivo: {com.correcciones[com.correcciones.length - 1].motivo}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <p className="text-[10px] text-gray-600 font-bold uppercase tracking-tighter">Por: {com.nombreColaborador} (ID: {com.colaboradorId})</p>
                                             </div>
                                         ))
                                     )
@@ -1602,6 +1627,18 @@ export default function MonitoreoPage() {
                             </div>
                         </div>
                     </div>
+                )
+            }
+
+            {
+                correctionModal && correctionModal.show && (
+                    <ModalCorregirComentario
+                        comentarioId={correctionModal.comentarioId}
+                        comentarioActual={correctionModal.comentarioActual}
+                        colaboradores={colaboradores}
+                        onClose={() => setCorrectionModal(null)}
+                        onSuccess={(msg) => alert(msg)}
+                    />
                 )
             }
         </div >
