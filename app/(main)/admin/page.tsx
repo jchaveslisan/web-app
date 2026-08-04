@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -49,6 +49,7 @@ export default function AdminPage() {
         events: any[];
         comments: any[];
     } | null>(null);
+    const [expandedOPs, setExpandedOPs] = useState<Record<string, boolean>>({});
 
     const [colaboradores, setColaboradores] = useState<ColaboradorMaestro[]>([]);
     const [newCedula, setNewCedula] = useState('');
@@ -793,6 +794,53 @@ export default function AdminPage() {
                 body: movementsBody.length ? movementsBody.slice(0, 100) : [['No hay registros en el rango', '-', '-', '-', '-']],
                 styles: { fontSize: 8 },
                 headStyles: { fillColor: [71, 85, 105] }
+            });
+
+            doc.addPage();
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text('RESUMEN POR ORDEN DE PRODUCCIÓN Y ETAPAS', 20, 20);
+
+            const opBody: any[] = [];
+            stats.listOps.forEach((op: any) => {
+                opBody.push([
+                    `OP: ${op.ordenProduccion}\n[${op.articulo}] ${op.producto}`,
+                    'GLOBAL',
+                    `${op.trabajoCompletado.toLocaleString()} Uds`,
+                    formatDuration(op.directSeconds),
+                    formatDuration(op.setupSeconds),
+                    formatDuration(op.pauseSeconds),
+                    formatDuration(op.qualityWaitSeconds + op.qualityInspectionSeconds)
+                ]);
+
+                Object.values(op.etapas).forEach((et: any) => {
+                    opBody.push([
+                        `  ↳ Etapa: ${et.etapa}`,
+                        'Etapa',
+                        `${et.trabajoCompletado.toLocaleString()} Uds`,
+                        formatDuration(et.directSeconds),
+                        formatDuration(et.setupSeconds),
+                        formatDuration(et.pauseSeconds),
+                        formatDuration(et.qualityWaitSeconds + et.qualityInspectionSeconds)
+                    ]);
+                });
+            });
+
+            autoTable(doc, {
+                startY: 30,
+                head: [['Orden y Producto', 'Nivel', 'Producción', 'H-H Directas', 'Setup', 'Pausas', 'Calidad']],
+                body: opBody.length ? opBody : [['No hay datos registrados', '-', '-', '-', '-', '-', '-']],
+                styles: { fontSize: 8 },
+                headStyles: { fillColor: [15, 23, 42] },
+                didParseCell: (data) => {
+                    const rawRow = data.row.raw as any[];
+                    if (rawRow && rawRow[1] === 'GLOBAL') {
+                        data.cell.styles.fontStyle = 'bold';
+                        data.cell.styles.fillColor = [241, 245, 249];
+                    } else {
+                        data.cell.styles.textColor = [100, 116, 139];
+                    }
+                }
             });
 
             doc.addPage();
@@ -2691,6 +2739,124 @@ export default function AdminPage() {
                                 totalProductiveSeconds += op.totalSeconds;
                             });
 
+                            // Group stats by OP (Global & Etapa)
+                            const opMap: Record<string, any> = {};
+
+                            processes.forEach(p => {
+                                const op = p.ordenProduccion || 'N/A';
+                                if (!opMap[op]) {
+                                    opMap[op] = {
+                                        ordenProduccion: op,
+                                        producto: p.producto || 'N/A',
+                                        articulo: p.articulo || 'N/A',
+                                        trabajoCompletado: 0,
+                                        setupSeconds: 0,
+                                        pauseSeconds: 0,
+                                        directSeconds: 0,
+                                        qualityWaitSeconds: 0,
+                                        qualityInspectionSeconds: 0,
+                                        etapas: {}
+                                    };
+                                }
+
+                                const opStat = opMap[op];
+                                opStat.trabajoCompletado += p.trabajoCompletado || 0;
+                                opStat.setupSeconds += p.tiempoSetupSegundos || 0;
+
+                                const call = p.calidadLlamadaEn?.toMillis?.() || p.calidadLlamadaEn?.seconds * 1000 || 0;
+                                const arrival = p.calidadLlegadaEn?.toMillis?.() || p.calidadLlegadaEn?.seconds * 1000 || 0;
+                                const approval = p.calidadAprobadaEn?.toMillis?.() || p.calidadAprobadaEn?.seconds * 1000 || 0;
+                                
+                                let pQualityWait = 0;
+                                let pQualityInsp = 0;
+
+                                if (call > 0 && arrival > 0) {
+                                    pQualityWait = Math.floor((arrival - call) / 1000);
+                                } else if (call > 0 && p.calidadEstado === 'esperando') {
+                                    pQualityWait = Math.floor((Date.now() - call) / 1000);
+                                }
+                                
+                                if (arrival > 0 && approval > 0) {
+                                    pQualityInsp = Math.floor((approval - arrival) / 1000);
+                                } else if (arrival > 0 && p.calidadEstado === 'inspeccion') {
+                                    pQualityInsp = Math.floor((Date.now() - arrival) / 1000);
+                                }
+
+                                opStat.qualityWaitSeconds += pQualityWait;
+                                opStat.qualityInspectionSeconds += pQualityInsp;
+
+                                const pEvents = events.filter(e => e.procesoId === p.id).sort((a, b) => {
+                                    const timeA = a.horaEvento?.toMillis?.() || a.horaEvento?.seconds * 1000 || 0;
+                                    const timeB = b.horaEvento?.toMillis?.() || b.horaEvento?.seconds * 1000 || 0;
+                                    return timeA - timeB;
+                                });
+
+                                let pPauseSec = 0;
+                                let pauseStart: number | null = null;
+                                pEvents.forEach(evt => {
+                                    const eventText = (evt.evento || "").toUpperCase();
+                                    const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+
+                                    if (eventText.includes('PAUSA')) {
+                                        pauseStart = timeMs;
+                                    } else if (eventText.includes('REANUDA') && pauseStart) {
+                                        pPauseSec += Math.floor((timeMs - pauseStart) / 1000);
+                                        pauseStart = null;
+                                    }
+                                });
+                                if (pauseStart && p.estado === 'Pausado') {
+                                    pPauseSec += Math.floor((Date.now() - pauseStart) / 1000);
+                                }
+                                opStat.pauseSeconds += pPauseSec;
+
+                                const et = p.etapa || 'Desconocida';
+                                if (!opStat.etapas[et]) {
+                                    opStat.etapas[et] = {
+                                        etapa: et,
+                                        trabajoCompletado: 0,
+                                        setupSeconds: 0,
+                                        pauseSeconds: 0,
+                                        directSeconds: 0,
+                                        qualityWaitSeconds: 0,
+                                        qualityInspectionSeconds: 0
+                                    };
+                                }
+                                const etStat = opStat.etapas[et];
+                                etStat.trabajoCompletado += p.trabajoCompletado || 0;
+                                etStat.setupSeconds += p.tiempoSetupSegundos || 0;
+                                etStat.qualityWaitSeconds += pQualityWait;
+                                etStat.qualityInspectionSeconds += pQualityInsp;
+                                etStat.pauseSeconds += pPauseSec;
+                            });
+
+                            logs.forEach(log => {
+                                const entry = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                                const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || 0;
+                                
+                                let duration = 0;
+                                if (entry && exit) {
+                                    duration = Math.floor((exit - entry) / 1000);
+                                } else if (entry && processes.some(p => p.id === log.procesoId && p.estado === 'Iniciado')) {
+                                    duration = Math.floor((Date.now() - entry) / 1000);
+                                }
+
+                                if (duration > 0) {
+                                    const proc = processes.find(p => p.id === log.procesoId);
+                                    if (proc) {
+                                        const op = proc.ordenProduccion || 'N/A';
+                                        if (opMap[op]) {
+                                            opMap[op].directSeconds += duration;
+                                            const et = proc.etapa || 'Desconocida';
+                                            if (opMap[op].etapas[et]) {
+                                                opMap[op].etapas[et].directSeconds += duration;
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+
+                            const listOps = Object.values(opMap);
+
                             const stats = {
                                 totalOPs,
                                 totalUnitsProduced,
@@ -2701,7 +2867,8 @@ export default function AdminPage() {
                                 totalQualityInspectionSeconds,
                                 totalProductiveSeconds,
                                 pauseReasons,
-                                operatorHours
+                                operatorHours,
+                                listOps
                             };
 
                             const formatDuration = (seconds: number) => {
@@ -2777,6 +2944,104 @@ export default function AdminPage() {
                                             <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">
                                                 Espera: {formatDuration(totalQualityWaitingSeconds)} • Insp: {formatDuration(totalQualityInspectionSeconds)}
                                             </p>
+                                        </div>
+                                    </div>
+
+                                    {/* RENDIMIENTO POR ORDEN DE PRODUCCIÓN Y ETAPAS */}
+                                    <div className="glass rounded-[2rem] border border-white/10 overflow-hidden bg-white/5 p-6 space-y-4">
+                                        <h3 className="text-lg font-black uppercase tracking-wider text-primary-blue flex items-center gap-2">
+                                            <ClipboardList className="h-5 w-5" /> RENDIMIENTO POR ORDEN DE PRODUCCIÓN Y ETAPAS
+                                        </h3>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left text-xs">
+                                                <thead>
+                                                    <tr className="border-b border-white/10 text-[10px] font-black uppercase text-gray-500 tracking-wider">
+                                                        <th className="pb-3 w-1/3">Orden / Producto</th>
+                                                        <th className="pb-3 text-right">Producción</th>
+                                                        <th className="pb-3 text-right">H-H Directas</th>
+                                                        <th className="pb-3 text-right">Setup</th>
+                                                        <th className="pb-3 text-right">Pausas</th>
+                                                        <th className="pb-3 text-right">Calidad</th>
+                                                        <th className="pb-3 text-center">Desglose</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-white/5 text-gray-300 font-medium">
+                                                    {listOps.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={7} className="py-6 text-center text-gray-500 italic">No hay órdenes procesadas en este rango</td>
+                                                        </tr>
+                                                    ) : (
+                                                        listOps.map(op => {
+                                                            const isExpanded = !!expandedOPs[op.ordenProduccion];
+                                                            return (
+                                                                <React.Fragment key={op.ordenProduccion}>
+                                                                    {/* OP Row (Global) */}
+                                                                    <tr className="hover:bg-white/[0.02] bg-white/[0.01]">
+                                                                        <td className="py-4 pr-4">
+                                                                            <div className="font-black text-white text-sm uppercase">OP: {op.ordenProduccion}</div>
+                                                                            <div className="text-[10px] text-gray-400 font-bold uppercase mt-0.5">
+                                                                                Art: {op.articulo} | {op.producto}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="py-4 text-right font-bold text-white font-mono">{op.trabajoCompletado.toLocaleString()} Uds</td>
+                                                                        <td className="py-4 text-right font-bold text-gray-300 font-mono">{formatDuration(op.directSeconds)}</td>
+                                                                        <td className="py-4 text-right font-bold text-gray-400 font-mono">{formatDuration(op.setupSeconds)}</td>
+                                                                        <td className="py-4 text-right font-bold text-danger-red font-mono">{formatDuration(op.pauseSeconds)}</td>
+                                                                        <td className="py-4 text-right font-bold text-primary-blue font-mono">
+                                                                            {formatDuration(op.qualityWaitSeconds + op.qualityInspectionSeconds)}
+                                                                        </td>
+                                                                        <td className="py-4 text-center">
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    setExpandedOPs(prev => ({
+                                                                                        ...prev,
+                                                                                        [op.ordenProduccion]: !prev[op.ordenProduccion]
+                                                                                    }));
+                                                                                }}
+                                                                                className={cn(
+                                                                                    "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase border transition-all",
+                                                                                    isExpanded
+                                                                                        ? "bg-white/10 border-white/20 text-white"
+                                                                                        : "bg-primary-blue/15 border-primary-blue/30 text-primary-blue hover:bg-primary-blue/25"
+                                                                                )}
+                                                                            >
+                                                                                {isExpanded ? "Ocultar" : "Ver Etapas"}
+                                                                            </button>
+                                                                        </td>
+                                                                    </tr>
+
+                                                                    {/* Stage Breakdown Rows */}
+                                                                    {isExpanded && Object.values(op.etapas).map((et: any) => (
+                                                                        <tr key={et.etapa} className="bg-black/20 hover:bg-black/30 border-l-2 border-primary-blue/40">
+                                                                            <td className="py-3 pl-8 text-[11px] font-bold text-gray-400 uppercase">
+                                                                                ↳ {et.etapa}
+                                                                            </td>
+                                                                            <td className="py-3 text-right text-[11px] font-bold text-gray-400 font-mono">
+                                                                                {et.trabajoCompletado.toLocaleString()} Uds
+                                                                            </td>
+                                                                            <td className="py-3 text-right text-[11px] font-bold text-gray-400 font-mono">
+                                                                                {formatDuration(et.directSeconds)}
+                                                                            </td>
+                                                                            <td className="py-3 text-right text-[11px] font-bold text-gray-400 font-mono">
+                                                                                {formatDuration(et.setupSeconds)}
+                                                                            </td>
+                                                                            <td className="py-3 text-right text-[11px] font-bold text-gray-400 font-mono">
+                                                                                {formatDuration(et.pauseSeconds)}
+                                                                            </td>
+                                                                            <td className="py-3 text-right text-[11px] font-bold text-gray-400 font-mono">
+                                                                                {formatDuration(et.qualityWaitSeconds + et.qualityInspectionSeconds)}
+                                                                            </td>
+                                                                            <td className="py-3 text-center text-gray-500 font-bold uppercase tracking-wider text-[9px]">
+                                                                                Etapa
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </React.Fragment>
+                                                            );
+                                                        })
+                                                    )}
+                                                </tbody>
+                                            </table>
                                         </div>
                                     </div>
 
