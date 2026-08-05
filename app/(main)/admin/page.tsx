@@ -73,7 +73,7 @@ const adminSections = [
             { id: 'resumen', title: 'Resumen de Producción', desc: 'Tiempos, eficiencias y auditorías específicas por OP.', icon: BarChart3, theme: 'bg-primary-blue/10 border-primary-blue/20 text-primary-blue' },
             { id: 'reporteFechas', title: 'Reporte de Planta', desc: 'Consolidado general de volumen y tiempos en rangos de fechas.', icon: TrendingUp, theme: 'bg-purple-400/10 border-purple-400/20 text-purple-400' },
             { id: 'compararArticulos', title: 'Comparar Artículos', desc: 'Análisis comparativo de rendimiento entre corridas del mismo producto.', icon: Activity, theme: 'bg-amber-400/10 border-amber-400/20 text-amber-400' },
-            { id: 'reportes', title: 'Generador de PDF', desc: 'Descarga del reporte de tiempos consolidado de una OP en formato PDF.', icon: FileText, theme: 'bg-rose-400/10 border-rose-400/20 text-rose-400' },
+            { id: 'reportes', title: 'Reportes PDF OP', desc: 'Generación de reportes detallados en PDF por orden de producción.', icon: FileText, theme: 'bg-red-400/10 border-red-400/20 text-red-400' },
         ]
     }
 ];
@@ -1517,7 +1517,7 @@ export default function AdminPage() {
                                 tab === 'resumen' ? "Resumen de Producción" :
                                 tab === 'reporteFechas' ? "Reporte de Planta" :
                                 tab === 'compararArticulos' ? "Comparar Artículos" :
-                                tab === 'reportes' ? "Generador de PDF" :
+                                tab === 'reportes' ? "Reportes PDF OP" :
                                 "Administración"
                             )}
                         </h1>
@@ -1555,7 +1555,7 @@ export default function AdminPage() {
                                 <option value="resumen">Resumen de Producción</option>
                                 <option value="reporteFechas">Reporte de Planta</option>
                                 <option value="compararArticulos">Comparar Artículos</option>
-                                <option value="reportes">Generador de PDF</option>
+                                <option value="reportes">Reportes PDF OP</option>
                             </optgroup>
                         </select>
                     </div>
