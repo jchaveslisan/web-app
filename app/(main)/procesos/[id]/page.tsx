@@ -998,22 +998,24 @@ export default function MonitoreoPage() {
                                     </div>
 
                                     {/* Caja 2: Colaborador Apoyo */}
-                                    <div className="relative flex-1">
-                                        <div className="absolute -top-5 left-1 text-[9px] font-black uppercase text-primary-blue tracking-wider">Ingreso Personal Apoyo</div>
-                                        <input
-                                            type="text"
-                                            autoComplete="new-password"
-                                            placeholder={proceso.estado === 'Finalizado' ? "CERRADO" : "PIN APOYO..."}
-                                            value={staffCodeApoyo}
-                                            onChange={(e) => setStaffCodeApoyo(e.target.value.toUpperCase())}
-                                            disabled={staffActionLoading || proceso.estado === 'Finalizado'}
-                                            className="w-full bg-white border-2 border-primary-blue rounded-xl p-3 font-mono text-xl font-black text-center text-black focus:ring-4 focus:ring-primary-blue/20 outline-none transition-all placeholder:text-gray-400 disabled:opacity-50"
-                                            style={{ WebkitTextSecurity: 'disc' } as any}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') handleStaffAction('apoyo', staffCodeApoyo);
-                                            }}
-                                        />
-                                    </div>
+                                    {getTipoProcesoReal(proceso) === 'empaque' && (
+                                        <div className="relative flex-1">
+                                            <div className="absolute -top-5 left-1 text-[9px] font-black uppercase text-primary-blue tracking-wider">Ingreso Personal Apoyo</div>
+                                            <input
+                                                type="text"
+                                                autoComplete="new-password"
+                                                placeholder={proceso.estado === 'Finalizado' ? "CERRADO" : "PIN APOYO..."}
+                                                value={staffCodeApoyo}
+                                                onChange={(e) => setStaffCodeApoyo(e.target.value.toUpperCase())}
+                                                disabled={staffActionLoading || proceso.estado === 'Finalizado'}
+                                                className="w-full bg-white border-2 border-primary-blue rounded-xl p-3 font-mono text-xl font-black text-center text-black focus:ring-4 focus:ring-primary-blue/20 outline-none transition-all placeholder:text-gray-400 disabled:opacity-50"
+                                                style={{ WebkitTextSecurity: 'disc' } as any}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') handleStaffAction('apoyo', staffCodeApoyo);
+                                                }}
+                                            />
+                                        </div>
+                                    )}
 
                                     {/* Mensaje de Feedback de Personal */}
                                     {staffMessage && (
