@@ -26,7 +26,8 @@ import {
     MessageSquare,
     ShieldCheck,
     AlertTriangle,
-    Package
+    Package,
+    Activity
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/auth-service';
@@ -35,9 +36,16 @@ import { db } from '@/lib/firebase';
 import { getComentariosByOP, deleteComentario, correctComentario } from '@/lib/firebase-db';
 import ModalCorregirComentario from '@/components/proceso/ModalCorregirComentario';
 import { ColaboradorMaestro, Justificacion, Etapa, User, UserRole, OrdenMaestra, MotivoCorreccion } from '@/types';
+const formatDuration = (seconds: number) => {
+    if (seconds < 0) return '0s';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return `${h}h ${m}m ${s}s`;
+};
 
 export default function AdminPage() {
-    const [tab, setTab] = useState<'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios' | 'ordenes' | 'reportes' | 'resumen' | 'articulos' | 'reporteFechas' | 'motivosCorreccion'>('personal');
+    const [tab, setTab] = useState<'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios' | 'ordenes' | 'reportes' | 'resumen' | 'articulos' | 'reporteFechas' | 'motivosCorreccion' | 'compararArticulos' | 'historialColaborador'>('personal');
     
     // Date Range Report States
     const [reportStartDate, setReportStartDate] = useState('');
@@ -85,6 +93,16 @@ export default function AdminPage() {
     const [correctionModal, setCorrectionModal] = useState<{ show: boolean; comentario: any } | null>(null);
     const [motivosCorreccion, setMotivosCorreccion] = useState<MotivoCorreccion[]>([]);
     const [newMotivoCorreccionTexto, setNewMotivoCorreccionTexto] = useState('');
+    
+    // New states for Comparar Artículos & Horas Colaborador
+    const [selectedArticulo, setSelectedArticulo] = useState('');
+    const [colaboradorReportId, setColaboradorReportId] = useState('');
+    const [colaboradorReportDate, setColaboradorReportDate] = useState('');
+    const [colaboradorReportLoading, setColaboradorReportLoading] = useState(false);
+    const [colaboradorReportData, setColaboradorReportData] = useState<any>(null);
+    const [comparacionData, setComparacionData] = useState<any[]>([]);
+    const [loadingComparacion, setLoadingComparacion] = useState(false);
+
     const router = useRouter();
 
     // Form states for adding
@@ -225,6 +243,284 @@ export default function AdminPage() {
             console.error(error);
         }
     };
+
+    const handleGenerateColaboradorReport = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!colaboradorReportId || !colaboradorReportDate) {
+            alert('Por favor seleccione colaborador y fecha');
+            return;
+        }
+        setColaboradorReportLoading(true);
+        setColaboradorReportData(null);
+        try {
+            const dayStart = new Date(colaboradorReportDate + 'T00:00:00');
+            const dayEnd = new Date(colaboradorReportDate + 'T23:59:59');
+            const dayStartMs = dayStart.getTime();
+            const dayEndMs = dayEnd.getTime();
+
+            const q = query(
+                collection(db, 'colaboradores_log'),
+                where('colaboradorId', '==', colaboradorReportId)
+            );
+            const snapshot = await getDocs(q);
+            const rawLogs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+
+            const dayLogs = rawLogs.filter(log => {
+                const entry = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || Date.now();
+                return entry < dayEndMs && exit > dayStartMs;
+            });
+
+            if (dayLogs.length === 0) {
+                setColaboradorReportData({
+                    colaboradorNombre: colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || 'Colaborador',
+                    totalSeconds: 0,
+                    effectiveSeconds: 0,
+                    breakdown: []
+                });
+                return;
+            }
+
+            const processIds = Array.from(new Set(dayLogs.map(l => l.procesoId)));
+            const processesMap: Record<string, any> = {};
+            const eventsMap: Record<string, any[]> = {};
+
+            await Promise.all(processIds.map(async (pId) => {
+                const pDoc = await getDoc(doc(db, 'procesos', pId));
+                if (pDoc.exists()) {
+                    processesMap[pId] = { id: pDoc.id, ...pDoc.data() };
+                }
+
+                const evtsQ = query(
+                    collection(db, 'eventos'),
+                    where('procesoId', '==', pId)
+                );
+                const evtsSnapshot = await getDocs(evtsQ);
+                eventsMap[pId] = evtsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            }));
+
+            let totalSeconds = 0;
+            let effectiveSeconds = 0;
+            const breakdown: any[] = [];
+
+            dayLogs.forEach(log => {
+                const process = processesMap[log.procesoId];
+                if (!process) return;
+
+                const logStart = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                const logEnd = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || (process.estado === 'Iniciado' ? Date.now() : (process.horaFinReal?.toMillis?.() || process.horaFinReal?.seconds * 1000 || Date.now()));
+
+                const overlapStart = Math.max(logStart, dayStartMs);
+                const overlapEnd = Math.min(logEnd, dayEndMs);
+
+                if (overlapEnd <= overlapStart) return;
+
+                const logTotalDuration = Math.floor((overlapEnd - overlapStart) / 1000);
+                totalSeconds += logTotalDuration;
+
+                const runningIntervals: { start: number; end: number }[] = [];
+                const pStart = process.horaInicioReal?.toMillis?.() || process.horaInicioReal?.seconds * 1000 || 0;
+                if (pStart > 0) {
+                    let currentStart = pStart;
+                    const pEvents = eventsMap[log.procesoId] || [];
+                    const sortedEvents = [...pEvents].sort((a, b) => {
+                        const timeA = a.horaEvento?.toMillis?.() || a.horaEvento?.seconds * 1000 || 0;
+                        const timeB = b.horaEvento?.toMillis?.() || b.horaEvento?.seconds * 1000 || 0;
+                        return timeA - timeB;
+                    });
+
+                    sortedEvents.forEach(evt => {
+                        const eventText = (evt.evento || "").toUpperCase();
+                        const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                        
+                        if (eventText.includes('PAUSA')) {
+                            if (currentStart > 0 && timeMs > currentStart) {
+                                runningIntervals.push({ start: currentStart, end: timeMs });
+                                currentStart = 0;
+                            }
+                        } else if (eventText.includes('REANUDA')) {
+                            if (currentStart === 0) {
+                                currentStart = timeMs;
+                            }
+                        }
+                    });
+
+                    if (currentStart > 0) {
+                        const pEnd = process.horaFinReal?.toMillis?.() || process.horaFinReal?.seconds * 1000 || Date.now();
+                        if (pEnd > currentStart) {
+                            runningIntervals.push({ start: currentStart, end: pEnd });
+                        }
+                    }
+                }
+
+                let logEffectiveDuration = 0;
+                runningIntervals.forEach(interval => {
+                    const tripleOverlapStart = Math.max(overlapStart, interval.start);
+                    const tripleOverlapEnd = Math.min(overlapEnd, interval.end);
+                    if (tripleOverlapEnd > tripleOverlapStart) {
+                        logEffectiveDuration += Math.floor((tripleOverlapEnd - tripleOverlapStart) / 1000);
+                    }
+                });
+
+                effectiveSeconds += logEffectiveDuration;
+
+                breakdown.push({
+                    id: log.id,
+                    op: process.ordenProduccion,
+                    etapa: process.etapa,
+                    producto: process.producto,
+                    tipo: log.tipo || 'colaborador',
+                    entry: new Date(overlapStart),
+                    exit: log.horaSalida ? new Date(overlapEnd) : null,
+                    totalDuration: logTotalDuration,
+                    effectiveDuration: logEffectiveDuration,
+                    estadoProceso: process.estado
+                });
+            });
+
+            setColaboradorReportData({
+                colaboradorNombre: colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || 'Colaborador',
+                totalSeconds,
+                effectiveSeconds,
+                breakdown
+            });
+        } catch (error) {
+            console.error('Error generating report:', error);
+            alert('Error al generar el reporte del colaborador');
+        } finally {
+            setColaboradorReportLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (tab !== 'compararArticulos' || !selectedArticulo) {
+            setComparacionData([]);
+            return;
+        }
+
+        const loadComparacionData = async () => {
+            setLoadingComparacion(true);
+            try {
+                const filteredProcs = allProcesos.filter(p => p.articulo === selectedArticulo);
+                if (filteredProcs.length === 0) {
+                    setComparacionData([]);
+                    return;
+                }
+
+                const procIds = filteredProcs.map(p => p.id);
+                const processesWithTimes = await Promise.all(filteredProcs.map(async (p) => {
+                    const logsQ = query(collection(db, 'colaboradores_log'), where('procesoId', '==', p.id));
+                    const logsSnapshot = await getDocs(logsQ);
+                    const pLogs = logsSnapshot.docs.map(doc => doc.data());
+
+                    const evtsQ = query(collection(db, 'eventos'), where('procesoId', '==', p.id));
+                    const evtsSnapshot = await getDocs(evtsQ);
+                    const pEvents = evtsSnapshot.docs.map(doc => doc.data());
+
+                    let procPauseSeconds = 0;
+                    let procPauseStart: number | null = null;
+                    const sortedEvents = [...pEvents].sort((a, b) => {
+                        const timeA = a.horaEvento?.toMillis?.() || a.horaEvento?.seconds * 1000 || 0;
+                        const timeB = b.horaEvento?.toMillis?.() || b.horaEvento?.seconds * 1000 || 0;
+                        return timeA - timeB;
+                    });
+                    
+                    sortedEvents.forEach(evt => {
+                        const eventText = (evt.evento || "").toUpperCase();
+                        const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                        if (eventText.includes('PAUSA')) {
+                            procPauseStart = timeMs;
+                        } else if (eventText.includes('REANUDA') && procPauseStart) {
+                            procPauseSeconds += Math.floor((timeMs - procPauseStart) / 1000);
+                            procPauseStart = null;
+                        }
+                    });
+                    if (procPauseStart && p.estado === 'Pausado') {
+                        procPauseSeconds += Math.floor((Date.now() - procPauseStart) / 1000);
+                    }
+
+                    const qCall = p.calidadLlamadaEn?.toMillis?.() || p.calidadLlamadaEn?.seconds * 1000 || 0;
+                    const qArrival = p.calidadLlegadaEn?.toMillis?.() || p.calidadLlegadaEn?.seconds * 1000 || 0;
+                    const qApproval = p.calidadAprobadaEn?.toMillis?.() || p.calidadAprobadaEn?.seconds * 1000 || 0;
+                    
+                    let procQualityWaiting = 0;
+                    let procQualityInspection = 0;
+                    if (qCall > 0 && qArrival > 0) procQualityWaiting = Math.floor((qArrival - qCall) / 1000);
+                    else if (qCall > 0 && p.calidadEstado === 'esperando') procQualityWaiting = Math.floor((Date.now() - qCall) / 1000);
+                    
+                    if (qArrival > 0 && qApproval > 0) procQualityInspection = Math.floor((qApproval - qArrival) / 1000);
+                    else if (qArrival > 0 && p.calidadEstado === 'inspeccion') procQualityInspection = Math.floor((Date.now() - qArrival) / 1000);
+
+                    const runningIntervals: { start: number; end: number }[] = [];
+                    const pStart = p.horaInicioReal?.toMillis?.() || p.horaInicioReal?.seconds * 1000 || 0;
+                    if (pStart > 0) {
+                        let currentStart = pStart;
+                        sortedEvents.forEach(evt => {
+                            const eventText = (evt.evento || "").toUpperCase();
+                            const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                            if (eventText.includes('PAUSA')) {
+                                if (currentStart > 0 && timeMs > currentStart) {
+                                    runningIntervals.push({ start: currentStart, end: timeMs });
+                                    currentStart = 0;
+                                }
+                            } else if (eventText.includes('REANUDA')) {
+                                if (currentStart === 0) {
+                                    currentStart = timeMs;
+                                }
+                            }
+                        });
+                        if (currentStart > 0) {
+                            const pEnd = p.horaFinReal?.toMillis?.() || p.horaFinReal?.seconds * 1000 || Date.now();
+                            if (pEnd > currentStart) {
+                                runningIntervals.push({ start: currentStart, end: pEnd });
+                            }
+                        }
+                    }
+
+                    const effectiveProcessSeconds = runningIntervals.reduce((sum, interval) => sum + Math.floor((interval.end - interval.start) / 1000), 0);
+
+                    let effectiveHHSeconds = 0;
+                    pLogs.forEach(log => {
+                        const logStart = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                        const logEnd = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || (p.estado === 'Iniciado' ? Date.now() : (p.horaFinReal?.toMillis?.() || p.horaFinReal?.seconds * 1000 || Date.now()));
+
+                        if (logStart > 0 && logEnd > logStart) {
+                            runningIntervals.forEach(interval => {
+                                const overlapStart = Math.max(logStart, interval.start);
+                                const overlapEnd = Math.min(logEnd, interval.end);
+                                if (overlapEnd > overlapStart) {
+                                    effectiveHHSeconds += Math.floor((overlapEnd - overlapStart) / 1000);
+                                }
+                            });
+                        }
+                    });
+
+                    return {
+                        ...p,
+                        procPauseSeconds,
+                        procQualityWaiting,
+                        procQualityInspection,
+                        effectiveProcessSeconds,
+                        effectiveHHSeconds
+                    };
+                }));
+
+                processesWithTimes.sort((a, b) => {
+                    const timeA = a.creadoEn?.toMillis?.() || a.creadoEn?.seconds * 1000 || 0;
+                    const timeB = b.creadoEn?.toMillis?.() || b.creadoEn?.seconds * 1000 || 0;
+                    return timeB - timeA;
+                });
+
+                setComparacionData(processesWithTimes);
+            } catch (error) {
+                console.error('Error loading comparison data:', error);
+            } finally {
+                setLoadingComparacion(false);
+            }
+        };
+
+        loadComparacionData();
+    }, [selectedArticulo, tab, allProcesos]);
 
     const handleSyncAppSheet = async () => {
         setIsSyncing(true);
@@ -1291,6 +1587,28 @@ export default function AdminPage() {
                 >
                     <Package className="h-5 w-5" /> Artículos
                 </button>
+                <button
+                    onClick={() => { setTab('compararArticulos'); setShowForm(false); }}
+                    className={cn(
+                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
+                        tab === 'compararArticulos'
+                            ? "border-amber-400 text-amber-400"
+                            : "border-transparent text-gray-400 hover:text-white"
+                    )}
+                >
+                    <Activity className="h-5 w-5" /> Comparar Artículos
+                </button>
+                <button
+                    onClick={() => { setTab('historialColaborador'); setShowForm(false); }}
+                    className={cn(
+                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
+                        tab === 'historialColaborador'
+                            ? "border-pink-400 text-pink-400"
+                            : "border-transparent text-gray-400 hover:text-white"
+                    )}
+                >
+                    <Users className="h-5 w-5" /> Horas Colaborador
+                </button>
             </div>
 
             <div className="max-w-4xl mx-auto">
@@ -2149,6 +2467,75 @@ export default function AdminPage() {
 
                                 const mainProceso = procesosOP[0];
 
+                                const calculateProcessEffectiveTimes = (p: any, pEvents: any[], pLogs: any[]) => {
+                                    const runningIntervals: { start: number; end: number }[] = [];
+                                    const pStart = p.horaInicioReal?.toMillis?.() || p.horaInicioReal?.seconds * 1000 || 0;
+                                    if (pStart > 0) {
+                                        let currentStart = pStart;
+                                        const sortedEvents = [...pEvents].sort((a, b) => {
+                                            const timeA = a.horaEvento?.toMillis?.() || a.horaEvento?.seconds * 1000 || 0;
+                                            const timeB = b.horaEvento?.toMillis?.() || b.horaEvento?.seconds * 1000 || 0;
+                                            return timeA - timeB;
+                                        });
+
+                                        sortedEvents.forEach(evt => {
+                                            const eventText = (evt.evento || "").toUpperCase();
+                                            const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                                            
+                                            if (eventText.includes('PAUSA')) {
+                                                if (currentStart > 0 && timeMs > currentStart) {
+                                                    runningIntervals.push({ start: currentStart, end: timeMs });
+                                                    currentStart = 0;
+                                                }
+                                            } else if (eventText.includes('REANUDA')) {
+                                                if (currentStart === 0) {
+                                                    currentStart = timeMs;
+                                                }
+                                            }
+                                        });
+                                        
+                                        if (currentStart > 0) {
+                                            const pEnd = p.horaFinReal?.toMillis?.() || p.horaFinReal?.seconds * 1000 || Date.now();
+                                            if (pEnd > currentStart) {
+                                                runningIntervals.push({ start: currentStart, end: pEnd });
+                                            }
+                                        }
+                                    }
+
+                                    const effectiveProcessSeconds = runningIntervals.reduce((sum, interval) => sum + Math.floor((interval.end - interval.start) / 1000), 0);
+
+                                    let effectiveHHSeconds = 0;
+                                    pLogs.forEach(log => {
+                                        const logStart = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                                        const logEnd = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || (p.estado === 'Iniciado' ? Date.now() : (p.horaFinReal?.toMillis?.() || p.horaFinReal?.seconds * 1000 || Date.now()));
+
+                                        if (logStart > 0 && logEnd > logStart) {
+                                            runningIntervals.forEach(interval => {
+                                                const overlapStart = Math.max(logStart, interval.start);
+                                                const overlapEnd = Math.min(logEnd, interval.end);
+                                                if (overlapEnd > overlapStart) {
+                                                    effectiveHHSeconds += Math.floor((overlapEnd - overlapStart) / 1000);
+                                                }
+                                            });
+                                        }
+                                    });
+
+                                    return { effectiveProcessSeconds, effectiveHHSeconds };
+                                };
+
+                                let totalOPEffectiveProcessSeconds = 0;
+                                let totalOPEffectiveHHSeconds = 0;
+
+                                procesosOP.forEach(p => {
+                                    const pEvents = resumenEvents.filter(evt => evt.procesoId === p.id);
+                                    const pLogs = resumenLogs.filter(log => log.procesoId === p.id);
+                                    const { effectiveProcessSeconds, effectiveHHSeconds } = calculateProcessEffectiveTimes(p, pEvents, pLogs);
+                                    p._effectiveProcessSeconds = effectiveProcessSeconds;
+                                    p._effectiveHHSeconds = effectiveHHSeconds;
+                                    totalOPEffectiveProcessSeconds += effectiveProcessSeconds;
+                                    totalOPEffectiveHHSeconds += effectiveHHSeconds;
+                                });
+
                                 // Time Calculations
                                 const startTimes = procesosOP.map(p => p.horaInicioReal?.toMillis?.() || p.horaInicioReal?.seconds * 1000).filter(Boolean);
                                 const endTimes = procesosOP.map(p => p.horaFinReal?.toMillis?.() || p.horaFinReal?.seconds * 1000).filter(Boolean);
@@ -2315,6 +2702,31 @@ export default function AdminPage() {
 
                                         </div>
 
+                                        {/* Tiempos Efectivos de la OP */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="glass p-5 rounded-2xl border border-white/10 flex items-center gap-4 bg-gradient-to-br from-success-green/5 to-transparent">
+                                                <div className="p-3 bg-success-green/10 rounded-xl text-success-green border border-success-green/20">
+                                                    <Clock className="h-6 w-6" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">TIEMPO EFECTIVO PROCESO (LINEAL)</p>
+                                                    <h3 className="text-xl font-black text-white mt-1">{formatDuration(totalOPEffectiveProcessSeconds)}</h3>
+                                                    <p className="text-[9px] text-gray-500 font-bold uppercase mt-0.5">Tiempo total de corrida (excluye pausas)</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="glass p-5 rounded-2xl border border-white/10 flex items-center gap-4 bg-gradient-to-br from-primary-blue/5 to-transparent">
+                                                <div className="p-3 bg-primary-blue/10 rounded-xl text-primary-blue border border-primary-blue/20">
+                                                    <Users className="h-6 w-6" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">TIEMPO EFECTIVO HORAS-HOMBRE</p>
+                                                    <h3 className="text-xl font-black text-white mt-1">{formatDuration(totalOPEffectiveHHSeconds)}</h3>
+                                                    <p className="text-[9px] text-gray-500 font-bold uppercase mt-0.5">Esfuerzo real de mano de obra en marcha</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         {/* Comentarios de la OP */}
                                         <div className="glass p-6 rounded-3xl border border-white/10 bg-white/5">
                                             <h3 className="text-lg font-black uppercase text-primary-blue mb-4 flex items-center gap-2">
@@ -2478,6 +2890,14 @@ export default function AdminPage() {
                                                                 <div className="flex justify-between font-bold text-gray-400">
                                                                     <span>PAUSAS:</span>
                                                                     <span className="text-white font-mono">{formatDuration(procPauseSeconds)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between font-bold text-success-green border-t border-white/5 pt-1 mt-1">
+                                                                    <span>EFECTIVO PROCESO:</span>
+                                                                    <span className="font-mono">{formatDuration(p._effectiveProcessSeconds || 0)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between font-bold text-primary-blue">
+                                                                    <span>EFECTIVO H-H:</span>
+                                                                    <span className="font-mono">{formatDuration(p._effectiveHHSeconds || 0)}</span>
                                                                 </div>
                                                             </div>
 
@@ -3402,6 +3822,262 @@ export default function AdminPage() {
                                 <div className="p-20 text-center text-gray-500 font-bold uppercase tracking-widest text-xs">No hay artículos registrados</div>
                             )}
                         </div>
+                    </>
+                )}
+
+                {/* TAB: COMPARAR ARTICULOS */}
+                {tab === 'compararArticulos' && (
+                    <>
+                        <div className="flex items-center justify-between mb-8">
+                            <h2 className="text-xl font-black uppercase tracking-widest text-amber-400">Comparar Procesos por Artículo</h2>
+                        </div>
+
+                        <div className="glass p-6 rounded-3xl border border-white/10 mb-8 bg-white/5 space-y-6">
+                            <div>
+                                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Seleccione un Artículo</label>
+                                <select
+                                    value={selectedArticulo}
+                                    onChange={(e) => setSelectedArticulo(e.target.value)}
+                                    className="w-full bg-white border border-gray-300 text-black rounded-2xl p-4 font-bold outline-none focus:ring-4 focus:ring-amber-400/20 transition-all text-base cursor-pointer"
+                                >
+                                    <option value="">-- SELECCIONE UN ARTÍCULO --</option>
+                                    {articulos.map(art => (
+                                        <option key={art.id} value={art.codigo}>
+                                            {art.codigo} - {art.descripcion}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {selectedArticulo && (
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-white/5 pt-6 text-sm">
+                                    <div>
+                                        <span className="text-xs text-gray-500 font-bold uppercase block">Código</span>
+                                        <strong className="text-white uppercase font-mono">{selectedArticulo}</strong>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-gray-500 font-bold uppercase block">Producto</span>
+                                        <strong className="text-white uppercase">{articulos.find(a => a.codigo === selectedArticulo)?.descripcion || 'N/A'}</strong>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-gray-500 font-bold uppercase block">Velocidad Teórica</span>
+                                        <strong className="text-success-green font-mono">{articulos.find(a => a.codigo === selectedArticulo)?.velocidadTeorica || 0} uds/min</strong>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {selectedArticulo && (
+                            <div className="glass rounded-3xl overflow-hidden border border-white/10 bg-white/5 animate-in fade-in duration-500">
+                                {loadingComparacion ? (
+                                    <div className="p-20 text-center text-gray-400 font-bold uppercase tracking-widest text-xs flex flex-col items-center justify-center gap-4">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-4 border-amber-400 border-t-transparent" />
+                                        <span>Procesando y calculando métricas...</span>
+                                    </div>
+                                ) : comparacionData.length === 0 ? (
+                                    <div className="p-20 text-center text-gray-500 font-bold uppercase tracking-widest text-xs">No hay procesos registrados para este artículo</div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left text-xs whitespace-nowrap">
+                                            <thead>
+                                                <tr className="bg-white/5 border-b border-white/10 text-[9px] font-black uppercase text-gray-500 tracking-wider">
+                                                    <th className="p-4">OP / Lote / Etapa</th>
+                                                    <th className="p-4">Líder</th>
+                                                    <th className="p-4">Cantidades (Progreso)</th>
+                                                    <th className="p-4 text-center">Eficiencia</th>
+                                                    <th className="p-4 text-center">Setup</th>
+                                                    <th className="p-4 text-center">Pausas</th>
+                                                    <th className="p-4 text-center">Tiempo Proceso</th>
+                                                    <th className="p-4 text-center">Tiempo H-H</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-white/5 text-gray-300 font-medium">
+                                                {comparacionData.map(p => {
+                                                    const progress = p.cantidadProducir > 0 ? Math.min(100, (p.trabajoCompletado / p.cantidadProducir) * 100) : 0;
+                                                    const efficiency = p.velocidadTeorica > 0 ? ((p.trabajoCompletado / (p.cantidadProducir || 1)) * 100) : 0;
+                                                    
+                                                    return (
+                                                        <tr key={p.id} className="hover:bg-white/[0.01]">
+                                                            <td className="p-4">
+                                                                <div className="font-bold text-white uppercase font-mono">{p.ordenProduccion}</div>
+                                                                <div className="text-[10px] text-gray-400 font-mono mt-0.5">Lote: {p.lote}</div>
+                                                                <span className="inline-block bg-white/5 border border-white/10 text-[8px] font-black text-amber-400 px-2 py-0.5 rounded uppercase mt-1 tracking-wider">{p.etapa}</span>
+                                                            </td>
+                                                            <td className="p-4 uppercase text-gray-400 font-bold">{p.lider || 'N/A'}</td>
+                                                            <td className="p-4">
+                                                                <div className="font-mono text-white font-bold">{p.trabajoCompletado} / {p.cantidadProducir}</div>
+                                                                <div className="text-[10px] text-gray-500 font-mono mt-0.5">{progress.toFixed(1)}% completo</div>
+                                                            </td>
+                                                            <td className="p-4 text-center">
+                                                                <span className={cn(
+                                                                    "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border",
+                                                                    efficiency >= 95 ? "bg-success-green/10 border-success-green/20 text-success-green" :
+                                                                    efficiency >= 80 ? "bg-warning-yellow/10 border-warning-yellow/20 text-warning-yellow" :
+                                                                    "bg-danger-red/10 border-danger-red/20 text-danger-red"
+                                                                )}>
+                                                                    {efficiency.toFixed(1)}%
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-4 text-center font-mono">{formatDuration(p.tiempoSetupSegundos || 0)}</td>
+                                                            <td className="p-4 text-center font-mono text-warning-yellow">{formatDuration(p.procPauseSeconds || 0)}</td>
+                                                            <td className="p-4 text-center font-mono text-success-green font-bold">{formatDuration(p.effectiveProcessSeconds || 0)}</td>
+                                                            <td className="p-4 text-center font-mono text-primary-blue font-bold">{formatDuration(p.effectiveHHSeconds || 0)}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {/* TAB: HORAS DE COLABORADOR */}
+                {tab === 'historialColaborador' && (
+                    <>
+                        <div className="flex items-center justify-between mb-8">
+                            <h2 className="text-xl font-black uppercase tracking-widest text-pink-400">Reporte de Tiempos por Colaborador</h2>
+                        </div>
+
+                        <form onSubmit={handleGenerateColaboradorReport} className="glass p-6 rounded-3xl border border-white/10 mb-8 bg-white/5">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider">Seleccione un Colaborador</label>
+                                    <select
+                                        value={colaboradorReportId}
+                                        onChange={(e) => {
+                                            setColaboradorReportId(e.target.value);
+                                            setColaboradorReportData(null);
+                                        }}
+                                        className="w-full bg-white border border-gray-300 text-black rounded-2xl p-4 font-bold outline-none focus:ring-4 focus:ring-pink-400/20 transition-all text-base cursor-pointer"
+                                        required
+                                    >
+                                        <option value="">-- SELECCIONE UN COLABORADOR --</option>
+                                        {colaboradores.map(c => (
+                                            <option key={c.id} value={c.id}>
+                                                {c.nombreCompleto} ({c.id})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider">Seleccione la Fecha</label>
+                                    <input
+                                        type="date"
+                                        value={colaboradorReportDate}
+                                        onChange={(e) => {
+                                            setColaboradorReportDate(e.target.value);
+                                            setColaboradorReportData(null);
+                                        }}
+                                        className="w-full bg-white border border-gray-300 text-black rounded-2xl p-4 font-bold outline-none focus:ring-4 focus:ring-pink-400/20 transition-all text-base cursor-pointer font-mono"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={colaboradorReportLoading || !colaboradorReportId || !colaboradorReportDate}
+                                className="w-full mt-6 bg-pink-400 hover:bg-pink-500 text-black font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg shadow-pink-400/10 disabled:opacity-50"
+                            >
+                                {colaboradorReportLoading ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-black border-t-transparent" />
+                                        <span>Procesando Timecard...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <BarChart3 className="h-4 w-4" />
+                                        <span>Generar Reporte Diario</span>
+                                    </>
+                                )}
+                            </button>
+                        </form>
+
+                        {colaboradorReportData && (
+                            <div className="space-y-8 animate-in fade-in duration-500">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[110px] bg-gradient-to-br from-white/5 to-transparent">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Permanencia</span>
+                                        <div className="mt-2">
+                                            <h3 className="text-2xl font-black text-white font-mono">{formatDuration(colaboradorReportData.totalSeconds)}</h3>
+                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Horas transcurridas online</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[110px] bg-gradient-to-br from-success-green/10 to-transparent">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-success-green">Tiempo Efectivo Trabajo</span>
+                                        <div className="mt-2">
+                                            <h3 className="text-2xl font-black text-success-green font-mono">{formatDuration(colaboradorReportData.effectiveSeconds)}</h3>
+                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Descontando pausas de líneas</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[110px] bg-gradient-to-br from-primary-blue/10 to-transparent">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-primary-blue">Aprovechamiento Neto</span>
+                                        <div className="mt-2">
+                                            <h3 className="text-2xl font-black text-white font-mono">
+                                                {colaboradorReportData.totalSeconds > 0
+                                                    ? ((colaboradorReportData.effectiveSeconds / colaboradorReportData.totalSeconds) * 100).toFixed(1)
+                                                    : '0.0'}%
+                                            </h3>
+                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Proporción de tiempo productivo</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="glass rounded-3xl overflow-hidden border border-white/10 bg-white/5">
+                                    <div className="p-6 border-b border-white/5 bg-white/5">
+                                        <h3 className="text-sm font-black uppercase text-white tracking-wider">Desglose de Participación en Líneas</h3>
+                                    </div>
+                                    {colaboradorReportData.breakdown.length === 0 ? (
+                                        <div className="p-20 text-center text-gray-500 font-bold uppercase tracking-widest text-xs">No hay actividad registrada en esta fecha</div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left text-xs whitespace-nowrap">
+                                                <thead>
+                                                    <tr className="bg-white/5 border-b border-white/10 text-[9px] font-black uppercase text-gray-500 tracking-wider">
+                                                        <th className="p-4">Proceso / OP</th>
+                                                        <th className="p-4">Producto</th>
+                                                        <th className="p-4">Ingreso</th>
+                                                        <th className="p-4">Salida</th>
+                                                        <th className="p-4 text-center">Rol</th>
+                                                        <th className="p-4 text-right">Tiempo Permanencia</th>
+                                                        <th className="p-4 text-right text-success-green">Tiempo Efectivo</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-white/5 text-gray-300 font-medium">
+                                                    {colaboradorReportData.breakdown.map((item: any) => (
+                                                        <tr key={item.id} className="hover:bg-white/[0.01]">
+                                                            <td className="p-4">
+                                                                <div className="font-bold text-white uppercase font-mono">{item.op}</div>
+                                                                <span className="inline-block bg-white/5 border border-white/10 text-[8px] font-black text-pink-400 px-2 py-0.5 rounded uppercase mt-1 tracking-wider">{item.etapa}</span>
+                                                            </td>
+                                                            <td className="p-4 uppercase text-gray-400 font-bold max-w-xs truncate">{item.producto || 'N/A'}</td>
+                                                            <td className="p-4 font-mono">{format(item.entry, 'dd/MM/yyyy HH:mm:ss')}</td>
+                                                            <td className="p-4 font-mono">
+                                                                {item.exit ? format(item.exit, 'dd/MM/yyyy HH:mm:ss') : (item.estadoProceso === 'Iniciado' ? <span className="text-success-green animate-pulse">ACTIVO</span> : '-')}
+                                                            </td>
+                                                            <td className="p-4 text-center">
+                                                                <span className={cn(
+                                                                    "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border",
+                                                                    item.tipo === 'setup' ? "bg-accent-purple/10 border-accent-purple/20 text-accent-purple" : "bg-primary-blue/10 border-primary-blue/20 text-primary-blue"
+                                                                )}>
+                                                                    {item.tipo}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-4 text-right font-mono font-bold text-white">{formatDuration(item.totalDuration)}</td>
+                                                            <td className="p-4 text-right font-mono font-bold text-success-green">{formatDuration(item.effectiveDuration)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </>
                 )}
             </div>
