@@ -980,7 +980,7 @@ export default function MonitoreoPage() {
                                         <input
                                             type="text"
                                             autoComplete="new-password"
-                                            placeholder={proceso.estado === 'Finalizado' ? "CERRADO" : "COLABORADOR..."}
+                                            placeholder={proceso.estado === 'Finalizado' ? "CERRADO" : "PIN COLABORADOR..."}
                                             value={staffCodeBase}
                                             onChange={(e) => setStaffCodeBase(e.target.value.toUpperCase())}
                                             disabled={staffActionLoading || proceso.estado === 'Finalizado'}
@@ -1003,7 +1003,7 @@ export default function MonitoreoPage() {
                                         <input
                                             type="text"
                                             autoComplete="new-password"
-                                            placeholder={proceso.estado === 'Finalizado' ? "CERRADO" : "APOYO..."}
+                                            placeholder={proceso.estado === 'Finalizado' ? "CERRADO" : "PIN APOYO..."}
                                             value={staffCodeApoyo}
                                             onChange={(e) => setStaffCodeApoyo(e.target.value.toUpperCase())}
                                             disabled={staffActionLoading || proceso.estado === 'Finalizado'}
