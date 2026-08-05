@@ -130,7 +130,8 @@ export default function AdminPage() {
     // New states for Comparar Artículos & Horas Colaborador
     const [selectedArticulo, setSelectedArticulo] = useState('');
     const [colaboradorReportId, setColaboradorReportId] = useState('');
-    const [colaboradorReportDate, setColaboradorReportDate] = useState('');
+    const [colaboradorReportStartDate, setColaboradorReportStartDate] = useState('');
+    const [colaboradorReportEndDate, setColaboradorReportEndDate] = useState('');
     const [colaboradorReportLoading, setColaboradorReportLoading] = useState(false);
     const [colaboradorReportData, setColaboradorReportData] = useState<any>(null);
     const [comparacionData, setComparacionData] = useState<any[]>([]);
@@ -279,15 +280,15 @@ export default function AdminPage() {
 
     const handleGenerateColaboradorReport = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!colaboradorReportId || !colaboradorReportDate) {
-            alert('Por favor seleccione colaborador y fecha');
+        if (!colaboradorReportId || !colaboradorReportStartDate || !colaboradorReportEndDate) {
+            alert('Por favor seleccione colaborador y rango de fechas');
             return;
         }
         setColaboradorReportLoading(true);
         setColaboradorReportData(null);
         try {
-            const dayStart = new Date(colaboradorReportDate + 'T00:00:00');
-            const dayEnd = new Date(colaboradorReportDate + 'T23:59:59');
+            const dayStart = new Date(colaboradorReportStartDate + 'T00:00:00');
+            const dayEnd = new Date(colaboradorReportEndDate + 'T23:59:59');
             const dayStartMs = dayStart.getTime();
             const dayEndMs = dayEnd.getTime();
 
@@ -3929,8 +3930,8 @@ export default function AdminPage() {
                         </div>
 
                         <form onSubmit={handleGenerateColaboradorReport} className="glass p-6 rounded-3xl border border-white/10 mb-8 bg-white/5">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-                                <div className="space-y-2">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                                <div className="space-y-2 md:col-span-1">
                                     <label className="block text-xs font-black text-gray-500 uppercase tracking-wider">Seleccione un Colaborador</label>
                                     <select
                                         value={colaboradorReportId}
@@ -3950,12 +3951,25 @@ export default function AdminPage() {
                                     </select>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider">Seleccione la Fecha</label>
+                                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider">Fecha Inicio</label>
                                     <input
                                         type="date"
-                                        value={colaboradorReportDate}
+                                        value={colaboradorReportStartDate}
                                         onChange={(e) => {
-                                            setColaboradorReportDate(e.target.value);
+                                            setColaboradorReportStartDate(e.target.value);
+                                            setColaboradorReportData(null);
+                                        }}
+                                        className="w-full bg-white border border-gray-300 text-black rounded-2xl p-4 font-bold outline-none focus:ring-4 focus:ring-pink-400/20 transition-all text-base cursor-pointer font-mono"
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider">Fecha Fin</label>
+                                    <input
+                                        type="date"
+                                        value={colaboradorReportEndDate}
+                                        onChange={(e) => {
+                                            setColaboradorReportEndDate(e.target.value);
                                             setColaboradorReportData(null);
                                         }}
                                         className="w-full bg-white border border-gray-300 text-black rounded-2xl p-4 font-bold outline-none focus:ring-4 focus:ring-pink-400/20 transition-all text-base cursor-pointer font-mono"
@@ -3965,18 +3979,18 @@ export default function AdminPage() {
                             </div>
                             <button
                                 type="submit"
-                                disabled={colaboradorReportLoading || !colaboradorReportId || !colaboradorReportDate}
+                                disabled={colaboradorReportLoading || !colaboradorReportId || !colaboradorReportStartDate || !colaboradorReportEndDate}
                                 className="w-full mt-6 bg-pink-400 hover:bg-pink-500 text-black font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg shadow-pink-400/10 disabled:opacity-50"
                             >
                                 {colaboradorReportLoading ? (
                                     <>
                                         <div className="animate-spin rounded-full h-4 w-4 border-2 border-black border-t-transparent" />
-                                        <span>Procesando Timecard...</span>
+                                        <span>Procesando Rango...</span>
                                     </>
                                 ) : (
                                     <>
                                         <BarChart3 className="h-4 w-4" />
-                                        <span>Generar Reporte Diario</span>
+                                        <span>Generar Reporte por Rango</span>
                                     </>
                                 )}
                             </button>
