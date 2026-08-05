@@ -1458,7 +1458,7 @@ export default function MonitoreoPage() {
                                                 </div>
                                                 <div className="space-y-1.5 mb-1">
                                                     {com.correcciones && com.correcciones.map((corr, idx) => (
-                                                        <div key={idx} className="text-sm text-gray-500 line-through leading-relaxed italic opacity-40">
+                                                        <div key={idx} className="text-sm text-white/50 line-through leading-relaxed italic">
                                                             "{corr.comentarioAnterior}"
                                                         </div>
                                                     ))}

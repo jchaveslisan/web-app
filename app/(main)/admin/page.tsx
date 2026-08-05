@@ -2335,7 +2335,7 @@ export default function AdminPage() {
                                                                 </div>
                                                                 <div className="space-y-1">
                                                                     {com.correcciones && com.correcciones.map((corr: any, idx: number) => (
-                                                                        <div key={idx} className="text-xs text-gray-500 line-through leading-relaxed italic opacity-40">
+                                                                        <div key={idx} className="text-xs text-white/50 line-through leading-relaxed italic">
                                                                             "{corr.comentarioAnterior}"
                                                                         </div>
                                                                     ))}
@@ -2669,14 +2669,19 @@ export default function AdminPage() {
                                     if (eventText.includes('PAUSA')) {
                                         pauseStart = timeMs;
                                         lastJustification = evt.justificacion || 'Sin justificar';
-                                        if (!pauseReasons[lastJustification]) {
-                                            pauseReasons[lastJustification] = { count: 0, duration: 0 };
+                                        const isAcumulado = lastJustification.toUpperCase().includes('ACUMULADO');
+                                        if (!isAcumulado) {
+                                            if (!pauseReasons[lastJustification]) {
+                                                pauseReasons[lastJustification] = { count: 0, duration: 0 };
+                                            }
+                                            pauseReasons[lastJustification].count += 1;
+                                        } else {
+                                            lastJustification = '';
                                         }
-                                        pauseReasons[lastJustification].count += 1;
                                     } else if (eventText.includes('REANUDA') && pauseStart) {
                                         const duration = Math.floor((timeMs - pauseStart) / 1000);
                                         totalPauseSeconds += duration;
-                                        if (pauseReasons[lastJustification]) {
+                                        if (lastJustification && pauseReasons[lastJustification]) {
                                             pauseReasons[lastJustification].duration += duration;
                                         }
                                         pauseStart = null;
@@ -2686,7 +2691,7 @@ export default function AdminPage() {
                                 if (pauseStart && p.estado === 'Pausado') {
                                     const duration = Math.floor((Date.now() - pauseStart) / 1000);
                                     totalPauseSeconds += duration;
-                                    if (pauseReasons[lastJustification]) {
+                                    if (lastJustification && pauseReasons[lastJustification]) {
                                         pauseReasons[lastJustification].duration += duration;
                                     }
                                 }
@@ -3139,7 +3144,7 @@ export default function AdminPage() {
                                                             </div>
                                                             <div className="space-y-1">
                                                                 {com.correcciones && com.correcciones.map((corr: any, idx: number) => (
-                                                                    <div key={idx} className="text-xs text-gray-500 line-through leading-relaxed italic opacity-40">
+                                                                    <div key={idx} className="text-xs text-white/50 line-through leading-relaxed italic">
                                                                         "{corr.comentarioAnterior}"
                                                                     </div>
                                                                 ))}
