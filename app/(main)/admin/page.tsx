@@ -44,8 +44,41 @@ const formatDuration = (seconds: number) => {
     return `${h}h ${m}m ${s}s`;
 };
 
+const adminSections = [
+    {
+        group: "Control de Personal",
+        color: "text-primary-blue bg-primary-blue/10 border-primary-blue/20",
+        items: [
+            { id: 'personal', title: 'Personal', desc: 'Registro, edición y control de operarios activos en planta.', icon: Users, theme: 'bg-primary-blue/10 border-primary-blue/20 text-primary-blue' },
+            { id: 'historialColaborador', title: 'Horas Colaborador', desc: 'Auditoría de timecards, horas trabajadas y efectivas por persona.', icon: Clock, theme: 'bg-pink-400/10 border-pink-400/20 text-pink-400' },
+            { id: 'usuarios', title: 'Usuarios del Sistema', desc: 'Gestión de cuentas con acceso administrativo y supervisión.', icon: Key, theme: 'bg-indigo-400/10 border-indigo-400/20 text-indigo-400' },
+        ]
+    },
+    {
+        group: "Configuración y Maestros",
+        color: "text-accent-purple bg-accent-purple/10 border-accent-purple/20",
+        items: [
+            { id: 'etapas', title: 'Etapas de Proceso', desc: 'Configuración de etapas operativas, flujos y clasificaciones.', icon: ClipboardList, theme: 'bg-purple-400/10 border-purple-400/20 text-purple-400' },
+            { id: 'ordenes', title: 'Órdenes de Producción', desc: 'Importación y parametrización de OPs activas.', icon: Package, theme: 'bg-cyan-400/10 border-cyan-400/20 text-cyan-400' },
+            { id: 'articulos', title: 'Maestro de Artículos', desc: 'Velocidades teóricas y descripción de códigos de productos.', icon: Package, theme: 'bg-emerald-400/10 border-emerald-400/20 text-emerald-400' },
+            { id: 'pausa', title: 'Motivos de Pausa', desc: 'Justificaciones predefinidas para detenciones de línea.', icon: Pause, theme: 'bg-yellow-400/10 border-yellow-400/20 text-yellow-400' },
+            { id: 'salida', title: 'Motivos de Salida', desc: 'Justificaciones para retiros anticipados del personal.', icon: LogOut, theme: 'bg-orange-400/10 border-orange-400/20 text-orange-400' },
+            { id: 'motivosCorreccion', title: 'Motivos de Corrección', desc: 'Parametrización de motivos de cambios bajo ALCOA.', icon: Settings, theme: 'bg-rose-400/10 border-rose-400/20 text-rose-400' },
+        ]
+    },
+    {
+        group: "Reportes e Indicadores",
+        color: "text-success-green bg-success-green/10 border-success-green/20",
+        items: [
+            { id: 'resumen', title: 'Resumen de Producción', desc: 'Tiempos, eficiencias y auditorías específicas por OP.', icon: BarChart3, theme: 'bg-primary-blue/10 border-primary-blue/20 text-primary-blue' },
+            { id: 'reporteFechas', title: 'Reporte de Planta', desc: 'Consolidado general de volumen y tiempos en rangos de fechas.', icon: TrendingUp, theme: 'bg-purple-400/10 border-purple-400/20 text-purple-400' },
+            { id: 'compararArticulos', title: 'Comparar Artículos', desc: 'Análisis comparativo de rendimiento entre corridas del mismo producto.', icon: Activity, theme: 'bg-amber-400/10 border-amber-400/20 text-amber-400' },
+        ]
+    }
+];
+
 export default function AdminPage() {
-    const [tab, setTab] = useState<'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios' | 'ordenes' | 'reportes' | 'resumen' | 'articulos' | 'reporteFechas' | 'motivosCorreccion' | 'compararArticulos' | 'historialColaborador'>('personal');
+    const [tab, setTab] = useState<'hub' | 'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios' | 'ordenes' | 'reportes' | 'resumen' | 'articulos' | 'reporteFechas' | 'motivosCorreccion' | 'compararArticulos' | 'historialColaborador'>('hub');
     
     // Date Range Report States
     const [reportStartDate, setReportStartDate] = useState('');
@@ -1451,167 +1484,121 @@ export default function AdminPage() {
 
     return (
         <div className="min-h-screen bg-background text-white p-6 lg:p-10">
-            <header className="flex items-center gap-4 mb-10">
-                <button
-                    onClick={() => router.push('/procesos')}
-                    className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors border border-white/10"
-                >
-                    <ArrowLeft className="h-6 w-6" />
-                </button>
-                <div>
-                    <h1 className="text-3xl font-black tracking-tight uppercase">Administración</h1>
-                    <p className="text-gray-400 font-medium">Gestión de maestros y configuraciones</p>
+            <header className="flex items-center justify-between flex-wrap gap-4 mb-10 border-b border-white/5 pb-6">
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => {
+                            if (tab === 'hub') {
+                                router.push('/procesos');
+                            } else {
+                                setTab('hub');
+                                setShowForm(false);
+                            }
+                        }}
+                        className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors border border-white/10 flex items-center justify-center text-white"
+                        title={tab === 'hub' ? "Volver a Procesos" : "Volver al Panel Principal"}
+                    >
+                        <ArrowLeft className="h-6 w-6" />
+                    </button>
+                    <div>
+                        <h1 className="text-2xl lg:text-3xl font-black tracking-tight uppercase flex items-center gap-3">
+                            {tab === 'hub' ? "Administración" : (
+                                tab === 'personal' ? "Personal Registrado" :
+                                tab === 'historialColaborador' ? "Horas Colaborador" :
+                                tab === 'usuarios' ? "Usuarios del Sistema" :
+                                tab === 'etapas' ? "Etapas de Proceso" :
+                                tab === 'ordenes' ? "Órdenes de Producción" :
+                                tab === 'articulos' ? "Maestro de Artículos" :
+                                tab === 'pausa' ? "Motivos de Pausa" :
+                                tab === 'salida' ? "Motivos de Salida" :
+                                tab === 'motivosCorreccion' ? "Motivos de Corrección" :
+                                tab === 'resumen' ? "Resumen de Producción" :
+                                tab === 'reporteFechas' ? "Reporte de Planta" :
+                                tab === 'compararArticulos' ? "Comparar Artículos" :
+                                "Administración"
+                            )}
+                        </h1>
+                        <p className="text-gray-400 font-medium text-xs lg:text-sm">
+                            {tab === 'hub' ? "Gestión de maestros, reportes y configuraciones generales" : "Consola de Administración / Control Operativo"}
+                        </p>
+                    </div>
                 </div>
+
+                {tab !== 'hub' && (
+                    <div className="relative">
+                        <select
+                            value={tab}
+                            onChange={(e) => {
+                                setTab(e.target.value as any);
+                                setShowForm(false);
+                            }}
+                            className="bg-white border border-gray-300 text-black hover:border-gray-400 rounded-xl py-2.5 px-4 outline-none focus:ring-4 focus:ring-primary-blue/20 text-xs font-black uppercase tracking-wider cursor-pointer font-bold"
+                        >
+                            <option value="hub">-- IR AL PANEL PRINCIPAL --</option>
+                            <optgroup label="Personal">
+                                <option value="personal">Personal Registrado</option>
+                                <option value="historialColaborador">Horas Colaborador</option>
+                                <option value="usuarios">Usuarios del Sistema</option>
+                            </optgroup>
+                            <optgroup label="Configuración y Maestros">
+                                <option value="etapas">Etapas de Proceso</option>
+                                <option value="ordenes">Órdenes de Producción</option>
+                                <option value="articulos">Maestro de Artículos</option>
+                                <option value="pausa">Motivos de Pausa</option>
+                                <option value="salida">Motivos de Salida</option>
+                                <option value="motivosCorreccion">Motivos de Corrección</option>
+                            </optgroup>
+                            <optgroup label="Reportes e Indicadores">
+                                <option value="resumen">Resumen de Producción</option>
+                                <option value="reporteFechas">Reporte de Planta</option>
+                                <option value="compararArticulos">Comparar Artículos</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                )}
             </header>
 
-            {/* Tabs */}
-            <div className="mb-8 flex gap-3 border-b border-white/10 overflow-x-auto">
-                <button
-                    onClick={() => { setTab('personal'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'personal'
-                            ? "border-primary-blue text-primary-blue"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <Users className="h-5 w-5" /> Personal
-                </button>
-                <button
-                    onClick={() => { setTab('pausa'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'pausa'
-                            ? "border-warning-yellow text-warning-yellow"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <Pause className="h-5 w-5" /> Justificaciones de Pausa
-                </button>
-                <button
-                    onClick={() => { setTab('salida'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'salida'
-                            ? "border-danger-red text-danger-red"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <LogOut className="h-5 w-5" /> Justificaciones de Salida
-                </button>
-                <button
-                    onClick={() => { setTab('etapas'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'etapas'
-                            ? "border-accent-purple text-accent-purple"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    Etapas
-                </button>
-                <button
-                    onClick={() => { setTab('usuarios'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'usuarios'
-                            ? "border-emerald-400 text-emerald-400"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <Users className="h-5 w-5" /> Usuarios
-                </button>
-                <button
-                    onClick={() => { setTab('ordenes'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'ordenes'
-                            ? "border-primary-blue text-primary-blue"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <ClipboardList className="h-5 w-5" /> Ordenes OP
-                </button>
-                <button
-                    onClick={() => { setTab('reportes'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'reportes'
-                            ? "border-accent-purple text-accent-purple"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <FileText className="h-5 w-5" /> Reportes
-                </button>
-                <button
-                    onClick={() => { setTab('resumen'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'resumen'
-                            ? "border-primary-blue text-primary-blue"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <BarChart3 className="h-5 w-5" /> Resumen de Producción
-                </button>
-                <button
-                    onClick={() => { setTab('reporteFechas'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'reporteFechas'
-                            ? "border-accent-purple text-accent-purple"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <TrendingUp className="h-5 w-5" /> Reporte de Planta
-                </button>
-                <button
-                    onClick={() => { setTab('motivosCorreccion'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'motivosCorreccion'
-                            ? "border-warning-yellow text-warning-yellow"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <Settings className="h-5 w-5" /> Motivos Corrección
-                </button>
-                <button
-                    onClick={() => { setTab('articulos'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'articulos'
-                            ? "border-emerald-400 text-emerald-400"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <Package className="h-5 w-5" /> Artículos
-                </button>
-                <button
-                    onClick={() => { setTab('compararArticulos'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'compararArticulos'
-                            ? "border-amber-400 text-amber-400"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <Activity className="h-5 w-5" /> Comparar Artículos
-                </button>
-                <button
-                    onClick={() => { setTab('historialColaborador'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'historialColaborador'
-                            ? "border-pink-400 text-pink-400"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <Users className="h-5 w-5" /> Horas Colaborador
-                </button>
-            </div>
-
-            <div className="max-w-4xl mx-auto">
+            <div className={cn("mx-auto transition-all duration-500", tab === 'hub' ? "max-w-6xl" : "max-w-4xl")}>
+                {/* Admin Hub Landing View */}
+                {tab === 'hub' && (
+                    <div className="space-y-12 animate-in fade-in duration-500">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {adminSections.map((group, groupIdx) => (
+                                <div key={groupIdx} className="space-y-4">
+                                    <div className={cn(
+                                        "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border w-fit font-mono",
+                                        group.color
+                                    )}>
+                                        {group.group}
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-4">
+                                        {group.items.map(item => {
+                                            const Icon = item.icon;
+                                            return (
+                                                <button
+                                                    key={item.id}
+                                                    onClick={() => { setTab(item.id as any); setShowForm(false); }}
+                                                    className="w-full text-left glass p-5 rounded-[2rem] border border-white/5 bg-white/5 hover:bg-white/10 hover:border-white/15 transition-all duration-300 flex items-start gap-4 hover:scale-[1.02] shadow-lg group hover:shadow-xl hover:shadow-black/20"
+                                                >
+                                                    <div className={cn(
+                                                        "p-3.5 rounded-xl border transition-all duration-300 group-hover:scale-105 shrink-0",
+                                                        item.theme
+                                                    )}>
+                                                        <Icon className="h-5 w-5" />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <h3 className="font-black text-white uppercase text-sm group-hover:text-amber-400 transition-colors tracking-wide">{item.title}</h3>
+                                                        <p className="text-[11px] text-gray-400 font-medium leading-relaxed">{item.desc}</p>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 {/* TAB: PERSONAL */}
                 {tab === 'personal' && (
                     <>
