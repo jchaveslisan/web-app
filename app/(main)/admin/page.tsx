@@ -82,7 +82,7 @@ export default function AdminPage() {
     const [newEtapaNombre, setNewEtapaNombre] = useState('');
     const [newEtapaTipos, setNewEtapaTipos] = useState<string[]>(['empaque', 'otros', 'anexos']);
     const [editingItem, setEditingItem] = useState<{ id: string, type: string, data: any } | null>(null);
-    const [correctionModal, setCorrectionModal] = useState<{ show: boolean; comentarioId: string; comentarioActual: string } | null>(null);
+    const [correctionModal, setCorrectionModal] = useState<{ show: boolean; comentario: any } | null>(null);
     const [motivosCorreccion, setMotivosCorreccion] = useState<MotivoCorreccion[]>([]);
     const [newMotivoCorreccionTexto, setNewMotivoCorreccionTexto] = useState('');
     const router = useRouter();
@@ -2335,13 +2335,18 @@ export default function AdminPage() {
                                                                 </div>
                                                                 <div className="space-y-1">
                                                                     {com.correcciones && com.correcciones.map((corr: any, idx: number) => (
-                                                                        <div key={idx} className="text-xs text-white/50 line-through leading-relaxed italic">
-                                                                            "{corr.comentarioAnterior}"
+                                                                        <div key={idx} className="mb-1.5 last:mb-0 border-l border-white/10 pl-2">
+                                                                            <div className="text-xs text-white/50 line-through leading-relaxed italic">
+                                                                                "{corr.comentarioAnterior}"
+                                                                            </div>
+                                                                            <p className="text-[8px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">
+                                                                                Corregido: {corr.fechaCorreccion ? format((corr.fechaCorreccion as any).toDate(), 'dd/MM/yyyy HH:mm:ss') : 'Reciente'} por {corr.nombreColaborador} • Motivo: {corr.motivo || 'Sin especificar'}
+                                                                            </p>
                                                                         </div>
                                                                     ))}
                                                                     <p className="text-sm text-gray-200 font-medium leading-relaxed italic">"{com.comentario}"</p>
                                                                     {com.correcciones && com.correcciones.length > 0 && (
-                                                                        <p className="text-[9px] text-warning-yellow font-black uppercase tracking-[0.2em] mt-0.5">
+                                                                        <p className="text-[9px] text-warning-yellow font-black uppercase tracking-[0.2em] mt-1 border-l border-warning-yellow/30 pl-2">
                                                                             Última corrección por: {com.correcciones[com.correcciones.length - 1].nombreColaborador} (ID: {com.correcciones[com.correcciones.length - 1].colaboradorId}) • Motivo: {com.correcciones[com.correcciones.length - 1].motivo}
                                                                         </p>
                                                                     )}
@@ -2349,7 +2354,7 @@ export default function AdminPage() {
                                                                 <p className="text-[10px] text-gray-600 font-bold uppercase mt-1 tracking-tighter">Registrado por: {com.nombreColaborador} (PIN/ID: {com.colaboradorId})</p>
                                                             </div>
                                                             <button
-                                                                onClick={() => setCorrectionModal({ show: true, comentarioId: com.id, comentarioActual: com.comentario })}
+                                                                onClick={() => setCorrectionModal({ show: true, comentario: com })}
                                                                 className="p-2 hover:bg-warning-yellow/10 text-warning-yellow rounded-xl transition-all ml-4 shrink-0"
                                                                 title="Corregir comentario (Audit Trail)"
                                                             >
@@ -3144,13 +3149,18 @@ export default function AdminPage() {
                                                             </div>
                                                             <div className="space-y-1">
                                                                 {com.correcciones && com.correcciones.map((corr: any, idx: number) => (
-                                                                    <div key={idx} className="text-xs text-white/50 line-through leading-relaxed italic">
-                                                                        "{corr.comentarioAnterior}"
+                                                                    <div key={idx} className="mb-1.5 last:mb-0 border-l border-white/10 pl-2">
+                                                                        <div className="text-xs text-white/50 line-through leading-relaxed italic">
+                                                                            "{corr.comentarioAnterior}"
+                                                                        </div>
+                                                                        <p className="text-[8px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">
+                                                                            Corregido: {corr.fechaCorreccion ? format((corr.fechaCorreccion as any).toDate(), 'dd/MM/yyyy HH:mm:ss') : 'Reciente'} por {corr.nombreColaborador} • Motivo: {corr.motivo || 'Sin especificar'}
+                                                                        </p>
                                                                     </div>
                                                                 ))}
                                                                 <p className="text-sm font-bold text-white">"{com.comentario}"</p>
                                                                 {com.correcciones && com.correcciones.length > 0 && (
-                                                                    <p className="text-[9px] text-warning-yellow font-black uppercase tracking-[0.2em] mt-0.5">
+                                                                    <p className="text-[9px] text-warning-yellow font-black uppercase tracking-[0.2em] mt-1 border-l border-warning-yellow/30 pl-2">
                                                                         Última corrección por: {com.correcciones[com.correcciones.length - 1].nombreColaborador} (ID: {com.correcciones[com.correcciones.length - 1].colaboradorId}) • Motivo: {com.correcciones[com.correcciones.length - 1].motivo}
                                                                     </p>
                                                                 )}
@@ -3744,8 +3754,7 @@ export default function AdminPage() {
             )}
             {correctionModal && correctionModal.show && (
                 <ModalCorregirComentario
-                    comentarioId={correctionModal.comentarioId}
-                    comentarioActual={correctionModal.comentarioActual}
+                    comentario={correctionModal.comentario}
                     onClose={() => setCorrectionModal(null)}
                     onSuccess={(msg) => alert(msg)}
                 />

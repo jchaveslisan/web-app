@@ -49,6 +49,7 @@ export default function ModalAddComentario({ proceso, colaboradores, onClose, on
       const colabMaestro = await getColaboradorByClave(formattedPin);
       if (!colabMaestro) {
         setError('El PIN ingresado no es válido o el colaborador no está registrado.');
+        setPin('');
         setLoading(false);
         return;
       }
@@ -59,11 +60,13 @@ export default function ModalAddComentario({ proceso, colaboradores, onClose, on
       
       if (!estaRegistrado) {
         setError(`El colaborador "${colabMaestro.nombreCompleto}" no está registrado en este proceso (${proceso.etapa}). Para comentar, primero debe registrarse en la línea.`);
+        setPin('');
         setLoading(false);
         return;
       }
 
       // PIN Verificado y registrado en el proceso
+      setPin('');
       setCollaborator({
         id: colabMaestro.id,
         nombreCompleto: colabMaestro.nombreCompleto
@@ -72,6 +75,7 @@ export default function ModalAddComentario({ proceso, colaboradores, onClose, on
     } catch (err) {
       console.error('Error al verificar PIN:', err);
       setError('Ocurrió un error al verificar la identidad. Inténtelo de nuevo.');
+      setPin('');
     } finally {
       setLoading(false);
     }
@@ -166,7 +170,9 @@ export default function ModalAddComentario({ proceso, colaboradores, onClose, on
                   <div className="relative">
                     <input
                       ref={pinInputRef}
-                      type="password"
+                      type="text"
+                      autoComplete="new-password"
+                      style={{ WebkitTextSecurity: 'disc' } as any}
                       pattern="[0-9]*"
                       inputMode="numeric"
                       value={pin}

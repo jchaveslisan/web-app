@@ -106,7 +106,8 @@ export default function MonitoreoPage() {
     const [showStaffModal, setShowStaffModal] = useState(false);
     const [showEventsModal, setShowEventsModal] = useState(false);
     const [modalJustificacion, setModalJustificacion] = useState<{ show: boolean, tipo: 'pausa' | 'salida' }>({ show: false, tipo: 'pausa' });
-    const [staffCode, setStaffCode] = useState('');
+    const [staffCodeBase, setStaffCodeBase] = useState('');
+    const [staffCodeApoyo, setStaffCodeApoyo] = useState('');
     const [staffActionLoading, setStaffActionLoading] = useState(false);
     const [staffMessage, setStaffMessage] = useState<{ text: string, type: 'success' | 'error' | 'info' | 'exit' } | null>(null);
     const [showStaffTypeModal, setShowStaffTypeModal] = useState(false);
@@ -122,7 +123,7 @@ export default function MonitoreoPage() {
     const [comentarios, setComentarios] = useState<Comentario[]>([]);
     const [eventsModalTab, setEventsModalTab] = useState<'eventos' | 'comentarios'>('eventos');
     const [showEditModal, setShowEditModal] = useState(false);
-    const [correctionModal, setCorrectionModal] = useState<{ show: boolean; comentarioId: string; comentarioActual: string } | null>(null);
+    const [correctionModal, setCorrectionModal] = useState<{ show: boolean; comentario: Comentario } | null>(null);
 
     // Sincronizar unidades calculadas con el valor de la base de datos cuando cambia
     useEffect(() => {
@@ -509,13 +510,18 @@ export default function MonitoreoPage() {
         </div>
     );
 
-    const handleStaffAction = async () => {
-        if (!staffCode.trim() || staffActionLoading) return;
+    const handleStaffAction = async (tipoIngreso: 'colaborador' | 'apoyo', pin: string) => {
+        const trimmedPin = pin.trim().toUpperCase();
+        if (!trimmedPin || staffActionLoading) return;
         setStaffActionLoading(true);
         setStaffMessage(null);
 
+        // Limpiar inputs de inmediato
+        setStaffCodeBase('');
+        setStaffCodeApoyo('');
+
         try {
-            const maestro = await getColaboradorByClave(staffCode.trim());
+            const maestro = await getColaboradorByClave(trimmedPin);
             if (!maestro) {
                 setStaffMessage({ text: 'CÓDIGO NO ENCONTRADO', type: 'error' });
                 setTimeout(() => setStaffMessage(null), 4000);
@@ -527,7 +533,6 @@ export default function MonitoreoPage() {
 
             if (logActivo) {
                 // YA ESTÁ -> ES UNA SALIDA
-                setStaffCode('');
                 handleSalidaColaborador(logActivo.id, maestro.nombreCompleto, maestro.mensajeSalida);
             } else {
                 // NO ESTÁ -> ES UN INGRESO
@@ -541,16 +546,8 @@ export default function MonitoreoPage() {
                     return;
                 }
 
-                // Proceder con ingreso
-                const tipoActual = getTipoProcesoReal(proceso);
-                if (tipoActual === 'anexos' || tipoActual === 'otros') {
-                    await handleConfirmStaffEntry('colaborador', maestro);
-                    setStaffCode('');
-                } else {
-                    setPendingStaffMaestro(maestro);
-                    setShowStaffTypeModal(true);
-                    setStaffCode('');
-                }
+                // Proceder con ingreso directamente
+                await handleConfirmStaffEntry(tipoIngreso, maestro);
             }
         } catch (error) {
             console.error('Error en acción de personal:', error);
@@ -976,51 +973,65 @@ export default function MonitoreoPage() {
                                         {personalActivo} ACTIVOS – VER LISTA
                                     </button>
                                 </div>
-
-                                <div className="flex gap-3 items-stretch">
+                                <div className="flex flex-col md:flex-row gap-4 items-stretch w-full mt-6">
+                                    {/* Caja 1: Colaborador Base */}
                                     <div className="relative flex-1">
+                                        <div className="absolute -top-5 left-1 text-[9px] font-black uppercase text-success-green tracking-wider">Ingreso Colaborador Base</div>
                                         <input
-                                            type="password"
-                                            placeholder={proceso.estado === 'Finalizado' ? "CERRADO" : "ESCANEAR ID..."}
-                                            value={staffCode}
-                                            onChange={(e) => setStaffCode(e.target.value.toUpperCase())}
+                                            type="text"
+                                            autoComplete="new-password"
+                                            placeholder={proceso.estado === 'Finalizado' ? "CERRADO" : "ESCANEAR PIN..."}
+                                            value={staffCodeBase}
+                                            onChange={(e) => setStaffCodeBase(e.target.value.toUpperCase())}
                                             disabled={staffActionLoading || proceso.estado === 'Finalizado'}
-                                            className="w-full bg-white border-2 border-primary-blue rounded-xl p-3 font-mono text-xl font-black text-center text-black focus:ring-4 focus:ring-primary-blue/20 outline-none transition-all placeholder:text-gray-400 disabled:opacity-50"
+                                            className="w-full bg-white border-2 border-success-green rounded-xl p-3 font-mono text-xl font-black text-center text-black focus:ring-4 focus:ring-success-green/20 outline-none transition-all placeholder:text-gray-400 disabled:opacity-50"
+                                            style={{ WebkitTextSecurity: 'disc' } as any}
                                             onKeyDown={(e) => {
-                                                if (e.key === 'Enter') handleStaffAction();
+                                                if (e.key === 'Enter') handleStaffAction('colaborador', staffCodeBase);
                                             }}
                                         />
                                         {staffActionLoading && (
                                             <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-blue border-t-transparent" />
-                                            </div>
-                                        )}
-
-                                        {/* Mensaje de Feedback de Personal */}
-                                        {staffMessage && (
-                                            <div className={cn(
-                                                "absolute -top-12 left-0 right-0 py-2 px-4 rounded-xl text-center font-black text-xs uppercase tracking-widest animate-in slide-in-from-bottom-2 fade-in duration-300",
-                                                staffMessage.type === 'success' ? "bg-success-green text-black" :
-                                                    staffMessage.type === 'error' ? "bg-danger-red text-white" :
-                                                        staffMessage.type === 'info' ? "bg-primary-blue text-white" : "bg-warning-yellow text-black"
-                                            )}>
-                                                {staffMessage.text}
+                                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-success-green border-t-transparent" />
                                             </div>
                                         )}
                                     </div>
 
-                                    <button
-                                        onClick={handleStaffAction}
-                                        disabled={staffActionLoading || !staffCode || proceso.estado === 'Finalizado'}
-                                        className="bg-primary-blue text-white px-6 py-3 rounded-xl font-black text-xs uppercase flex items-center gap-2 hover:bg-blue-600 disabled:opacity-50 transition-colors shadow-lg shadow-blue-500/10"
-                                    >
-                                        <UserPlus className="h-4 w-4" /> REGISTRAR
-                                    </button>
+                                    {/* Caja 2: Colaborador Apoyo */}
+                                    <div className="relative flex-1">
+                                        <div className="absolute -top-5 left-1 text-[9px] font-black uppercase text-primary-blue tracking-wider">Ingreso Personal Apoyo</div>
+                                        <input
+                                            type="text"
+                                            autoComplete="new-password"
+                                            placeholder={proceso.estado === 'Finalizado' ? "CERRADO" : "ESCANEAR PIN..."}
+                                            value={staffCodeApoyo}
+                                            onChange={(e) => setStaffCodeApoyo(e.target.value.toUpperCase())}
+                                            disabled={staffActionLoading || proceso.estado === 'Finalizado'}
+                                            className="w-full bg-white border-2 border-primary-blue rounded-xl p-3 font-mono text-xl font-black text-center text-black focus:ring-4 focus:ring-primary-blue/20 outline-none transition-all placeholder:text-gray-400 disabled:opacity-50"
+                                            style={{ WebkitTextSecurity: 'disc' } as any}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') handleStaffAction('apoyo', staffCodeApoyo);
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Mensaje de Feedback de Personal */}
+                                    {staffMessage && (
+                                        <div className={cn(
+                                            "fixed bottom-10 left-1/2 -translate-x-1/2 z-[250] py-4 px-8 rounded-2xl text-center font-black text-sm uppercase tracking-widest shadow-2xl animate-in slide-in-from-bottom-5 fade-in duration-300",
+                                            staffMessage.type === 'success' ? "bg-success-green text-black" :
+                                                staffMessage.type === 'error' ? "bg-danger-red text-white" :
+                                                    staffMessage.type === 'info' ? "bg-primary-blue text-white" : "bg-warning-yellow text-black"
+                                        )}>
+                                            {staffMessage.text}
+                                        </div>
+                                    )}
 
                                     {personalActivo > 0 && proceso.estado === 'Pausado' && (
                                         <button
+                                            type="button"
                                             onClick={() => setShowModalBulkExit(true)}
-                                            className="bg-warning-yellow text-black px-6 py-3 rounded-xl font-black text-xs uppercase flex items-center gap-2 hover:bg-yellow-600 transition-all shadow-lg shadow-yellow-500/10"
+                                            className="bg-warning-yellow text-black px-6 py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 hover:bg-yellow-600 transition-all shadow-lg shadow-yellow-500/10 shrink-0"
                                         >
                                             <LogOut className="h-4 w-4" /> SALIDA GRUPAL
                                         </button>
@@ -1447,7 +1458,7 @@ export default function MonitoreoPage() {
                                                         </span>
                                                         {proceso.estado !== 'Finalizado' && (
                                                             <button
-                                                                onClick={() => setCorrectionModal({ show: true, comentarioId: com.id, comentarioActual: com.comentario })}
+                                                                onClick={() => setCorrectionModal({ show: true, comentario: com })}
                                                                 className="p-1 hover:bg-white/10 text-gray-400 hover:text-warning-yellow rounded transition-colors"
                                                                 title="Corregir observación (Audit Trail)"
                                                             >
@@ -1457,17 +1468,22 @@ export default function MonitoreoPage() {
                                                     </div>
                                                 </div>
                                                 <div className="space-y-1.5 mb-1">
-                                                    {com.correcciones && com.correcciones.map((corr, idx) => (
-                                                        <div key={idx} className="text-sm text-white/50 line-through leading-relaxed italic">
-                                                            "{corr.comentarioAnterior}"
-                                                        </div>
-                                                    ))}
-                                                    <p className="text-lg font-black text-gray-100 leading-relaxed">"{com.comentario}"</p>
-                                                    {com.correcciones && com.correcciones.length > 0 && (
-                                                        <p className="text-[9px] text-warning-yellow font-black uppercase tracking-[0.2em] mt-0.5">
-                                                            Corregido por: {com.correcciones[com.correcciones.length - 1].nombreColaborador} (ID: {com.correcciones[com.correcciones.length - 1].colaboradorId}) • Motivo: {com.correcciones[com.correcciones.length - 1].motivo}
-                                                        </p>
-                                                    )}
+                                                     {com.correcciones && com.correcciones.map((corr: any, idx: number) => (
+                                                         <div key={idx} className="mb-2 last:mb-0 border-l border-white/10 pl-3">
+                                                             <div className="text-sm text-white/50 line-through leading-relaxed italic">
+                                                                 "{corr.comentarioAnterior}"
+                                                             </div>
+                                                             <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">
+                                                                 Corregido: {corr.fechaCorreccion ? format((corr.fechaCorreccion as any).toDate(), 'dd/MM/yyyy HH:mm:ss') : 'Reciente'} por {corr.nombreColaborador} • Motivo: {corr.motivo || 'Sin especificar'}
+                                                             </p>
+                                                         </div>
+                                                     ))}
+                                                     <p className="text-lg font-black text-gray-100 leading-relaxed">"{com.comentario}"</p>
+                                                     {com.correcciones && com.correcciones.length > 0 && (
+                                                         <p className="text-[9px] text-warning-yellow font-black uppercase tracking-[0.2em] mt-1.5 border-l border-warning-yellow/30 pl-3">
+                                                             Última corrección por: {com.correcciones[com.correcciones.length - 1].nombreColaborador} (ID: {com.correcciones[com.correcciones.length - 1].colaboradorId}) • Motivo: {com.correcciones[com.correcciones.length - 1].motivo}
+                                                         </p>
+                                                     )}
                                                 </div>
                                                 <p className="text-[10px] text-gray-600 font-bold uppercase tracking-tighter">Por: {com.nombreColaborador} (ID: {com.colaboradorId})</p>
                                             </div>
@@ -1633,8 +1649,7 @@ export default function MonitoreoPage() {
             {
                 correctionModal && correctionModal.show && (
                     <ModalCorregirComentario
-                        comentarioId={correctionModal.comentarioId}
-                        comentarioActual={correctionModal.comentarioActual}
+                        comentario={correctionModal.comentario}
                         colaboradores={colaboradores}
                         onClose={() => setCorrectionModal(null)}
                         onSuccess={(msg) => alert(msg)}
