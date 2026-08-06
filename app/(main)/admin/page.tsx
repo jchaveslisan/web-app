@@ -519,45 +519,64 @@ export default function AdminPage() {
                                 return Math.abs(exit - gapStart) < 2000;
                             });
 
-                            // Try to find a matching exit/completion event in Firestore events log
-                            const colabNombre = colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || '';
-                            const matchingEvent = periodEvents.find(evt => {
-                                const evtTime = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
-                                const timeDiff = Math.abs(evtTime - gapStart);
-                                if (timeDiff > 10000) return false; // within 10 seconds range
+                             // Try to find a matching exit/completion event in Firestore events log
+                             const colabNombre = colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || '';
+                             const cleanText = (str: string) => 
+                                 (str || "").normalize("NFD")
+                                           .replace(/[\u0300-\u036f]/g, "")
+                                           .toLowerCase();
 
-                                const eventText = (evt.evento || "").toUpperCase();
-                                const just = (evt.justificacion || "");
+                             const cleanColabName = cleanText(colabNombre);
+                             const cleanColabId = cleanText(colaboradorReportId);
 
-                                if (eventText.includes("SALIDA DE PERSONAL")) {
-                                    return just.toLowerCase().includes(colabNombre.toLowerCase()) || just.toLowerCase().includes(colaboradorReportId.toLowerCase());
-                                }
-                                if (eventText.includes("SETUP FINALIZADO") || eventText.includes("PROCESO FINALIZADO")) {
-                                    return evt.procesoId === endingLog?.procesoId;
-                                }
-                                return false;
-                            });
+                             // Find all matching events of the day
+                             const candidateEvents = periodEvents.filter(evt => {
+                                 const eventText = (evt.evento || "").toUpperCase();
+                                 const just = (evt.justificacion || "");
 
-                            let reason = endingLog?.justificacionSalida || "";
+                                 if (eventText.includes("SALIDA DE PERSONAL")) {
+                                     const cleanJust = cleanText(just);
+                                     return cleanJust.includes(cleanColabName) || cleanJust.includes(cleanColabId);
+                                 }
+                                 if (eventText.includes("SETUP FINALIZADO") || eventText.includes("PROCESO FINALIZADO")) {
+                                     return evt.procesoId === endingLog?.procesoId;
+                                 }
+                                 return false;
+                             });
 
-                            if (matchingEvent) {
-                                const eventText = (matchingEvent.evento || "").toUpperCase();
-                                if (eventText.includes("SALIDA DE PERSONAL")) {
-                                    let motiveText = matchingEvent.justificacion || "";
-                                    if (motiveText.includes(":")) {
-                                        motiveText = motiveText.split(":").slice(1).join(":").trim();
-                                    }
-                                    reason = motiveText;
-                                } else if (eventText.includes("SETUP FINALIZADO")) {
-                                    reason = "Finalización de Setup";
-                                } else if (eventText.includes("PROCESO FINALIZADO")) {
-                                    reason = "Finalización de Proceso";
-                                }
-                            }
+                             // Find the candidate event closest to gapStart
+                             let matchingEvent: any = null;
+                             let minTimeDiff = Infinity;
 
-                            if (!reason) {
-                                reason = "Salida Registrada / Fin de turno";
-                            }
+                             candidateEvents.forEach(evt => {
+                                 const evtTime = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                                 const timeDiff = Math.abs(evtTime - gapStart);
+                                 if (timeDiff < minTimeDiff && timeDiff <= 120000) { // within 2 minutes
+                                     minTimeDiff = timeDiff;
+                                     matchingEvent = evt;
+                                 }
+                             });
+
+                             let reason = endingLog?.justificacionSalida || "";
+
+                             if (matchingEvent) {
+                                 const eventText = (matchingEvent.evento || "").toUpperCase();
+                                 if (eventText.includes("SALIDA DE PERSONAL")) {
+                                     let motiveText = matchingEvent.justificacion || "";
+                                     if (motiveText.includes(":")) {
+                                         motiveText = motiveText.split(":").slice(1).join(":").trim();
+                                     }
+                                     reason = motiveText;
+                                 } else if (eventText.includes("SETUP FINALIZADO")) {
+                                     reason = "Finalización de Setup";
+                                 } else if (eventText.includes("PROCESO FINALIZADO")) {
+                                     reason = "Finalización de Proceso";
+                                 }
+                             }
+
+                             if (!reason) {
+                                 reason = "Salida Registrada / Fin de turno";
+                             }
 
                             inactiveGaps.push({
                                 id: `${dStr}-${gapStart}`,
