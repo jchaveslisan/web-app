@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { format } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays } from 'date-fns';
 import {
     ArrowLeft,
     Users,
@@ -279,6 +279,26 @@ export default function AdminPage() {
         }
     };
 
+    const handleSetPeriod = (period: 'hoy' | 'semana' | 'mes') => {
+        const now = new Date();
+        if (period === 'hoy') {
+            const todayStr = format(now, 'yyyy-MM-dd');
+            setColaboradorReportStartDate(todayStr);
+            setColaboradorReportEndDate(todayStr);
+        } else if (period === 'semana') {
+            const monday = startOfWeek(now, { weekStartsOn: 1 });
+            const sunday = endOfWeek(now, { weekStartsOn: 1 });
+            setColaboradorReportStartDate(format(monday, 'yyyy-MM-dd'));
+            setColaboradorReportEndDate(format(sunday, 'yyyy-MM-dd'));
+        } else if (period === 'mes') {
+            const firstDay = startOfMonth(now);
+            const lastDay = endOfMonth(now);
+            setColaboradorReportStartDate(format(firstDay, 'yyyy-MM-dd'));
+            setColaboradorReportEndDate(format(lastDay, 'yyyy-MM-dd'));
+        }
+        setColaboradorReportData(null);
+    };
+
     const handleGenerateColaboradorReport = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!colaboradorReportId || !colaboradorReportStartDate || !colaboradorReportEndDate) {
@@ -413,10 +433,95 @@ export default function AdminPage() {
                 });
             });
 
+            // Group and calculate linear presence and gaps per day
+            let totalPermanenceSeconds = 0;
+            let totalInactiveSeconds = 0;
+            const inactiveGaps: any[] = [];
+
+            // 1. Get list of distinct dates in the query range
+            const datesList: string[] = [];
+            let currentCursor = new Date(colaboradorReportStartDate + 'T00:00:00');
+            const endCursor = new Date(colaboradorReportEndDate + 'T23:59:59');
+            while (currentCursor <= endCursor) {
+                datesList.push(format(currentCursor, 'yyyy-MM-dd'));
+                currentCursor = addDays(currentCursor, 1);
+            }
+
+            // 2. For each day, find active intervals and compute gaps
+            datesList.forEach(dStr => {
+                const tS = new Date(dStr + 'T00:00:00').getTime();
+                const tE = new Date(dStr + 'T23:59:59').getTime();
+
+                // Get logs overlapping this day
+                const dayLogsForGaps = dayLogs.filter(log => {
+                    const entry = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                    const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || Date.now();
+                    return entry < tE && exit > tS;
+                });
+
+                if (dayLogsForGaps.length === 0) return;
+
+                // Map to intervals clamped to [tS, tE]
+                const intervals = dayLogsForGaps.map(log => {
+                    const entry = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                    const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || Date.now();
+                    return {
+                        start: Math.max(entry, tS),
+                        end: Math.min(exit, tE)
+                    };
+                });
+
+                // Sort intervals by start ascending
+                intervals.sort((a, b) => a.start - b.start);
+
+                // Merge overlapping intervals
+                const merged: { start: number; end: number }[] = [];
+                intervals.forEach(curr => {
+                    if (merged.length === 0) {
+                        merged.push(curr);
+                    } else {
+                        const last = merged[merged.length - 1];
+                        if (curr.start <= last.end) {
+                            last.end = Math.max(last.end, curr.end);
+                        } else {
+                            merged.push(curr);
+                        }
+                    }
+                });
+
+                if (merged.length > 0) {
+                    const earliestStart = merged[0].start;
+                    const latestEnd = merged[merged.length - 1].end;
+                    const presenceDuration = latestEnd - earliestStart;
+                    totalPermanenceSeconds += Math.floor(presenceDuration / 1000);
+
+                    // Check gaps between merged intervals
+                    for (let i = 0; i < merged.length - 1; i++) {
+                        const gapStart = merged[i].end;
+                        const gapEnd = merged[i + 1].start;
+                        const gapDuration = gapEnd - gapStart;
+                        if (gapDuration >= 5000) { // Gaps longer than 5 seconds
+                            const gapSecs = Math.floor(gapDuration / 1000);
+                            totalInactiveSeconds += gapSecs;
+                            inactiveGaps.push({
+                                id: `${dStr}-${gapStart}`,
+                                fecha: format(new Date(tS), 'dd/MM/yyyy'),
+                                inicio: gapStart,
+                                fin: gapEnd,
+                                duracion: gapSecs
+                            });
+                        }
+                    }
+                }
+            });
+
             setColaboradorReportData({
                 colaboradorNombre: colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || 'Colaborador',
                 totalSeconds,
                 effectiveSeconds,
+                totalPermanenceSeconds,
+                totalInactiveSeconds,
+                inactiveGaps,
                 breakdown
             });
         } catch (error) {
@@ -3979,6 +4084,32 @@ export default function AdminPage() {
                         </div>
 
                         <form onSubmit={handleGenerateColaboradorReport} className="glass p-6 rounded-3xl border border-white/10 mb-8 bg-white/5">
+                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6 border-b border-white/5 pb-4">
+                                <span className="text-xs font-black uppercase text-gray-400 tracking-widest">Parámetros de Consulta</span>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSetPeriod('hoy')}
+                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-white/10 hover:border-pink-400/30"
+                                    >
+                                        Hoy
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSetPeriod('semana')}
+                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-white/10 hover:border-pink-400/30"
+                                    >
+                                        Esta Semana
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSetPeriod('mes')}
+                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-white/10 hover:border-pink-400/30"
+                                    >
+                                        Este Mes
+                                    </button>
+                                </div>
+                            </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
                                 <div className="space-y-2 md:col-span-1">
                                     <label className="block text-xs font-black text-gray-500 uppercase tracking-wider">Seleccione un Colaborador</label>
@@ -4047,32 +4178,55 @@ export default function AdminPage() {
 
                         {colaboradorReportData && (
                             <div className="space-y-8 animate-in fade-in duration-500">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[110px] bg-gradient-to-br from-white/5 to-transparent">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Permanencia</span>
+                                <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                                    {/* Card 1: Tiempo en Planta */}
+                                    <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[110px] bg-gradient-to-br from-white/5 to-transparent col-span-1">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Tiempo en Planta</span>
                                         <div className="mt-2">
-                                            <h3 className="text-2xl font-black text-white font-mono">{formatDuration(colaboradorReportData.totalSeconds)}</h3>
-                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Horas transcurridas online</p>
+                                            <h3 className="text-2xl font-black text-white font-mono">{formatDuration(colaboradorReportData.totalPermanenceSeconds || colaboradorReportData.totalSeconds)}</h3>
+                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Presencia lineal (Jornada)</p>
                                         </div>
                                     </div>
 
-                                    <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[110px] bg-gradient-to-br from-success-green/10 to-transparent">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-success-green">Tiempo Efectivo Trabajo</span>
+                                    {/* Card 2: Tiempo en Procesos */}
+                                    <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[110px] bg-gradient-to-br from-primary-blue/15 to-transparent col-span-1">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-primary-blue">Tiempo en Procesos</span>
+                                        <div className="mt-2">
+                                            <h3 className="text-2xl font-black text-primary-blue font-mono">{formatDuration(colaboradorReportData.totalSeconds)}</h3>
+                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Suma de fichajes</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Card 3: Tiempo Inactivo */}
+                                    <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[110px] bg-gradient-to-br from-warning-yellow/15 to-transparent col-span-1">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-warning-yellow">Tiempo Inactivo</span>
+                                        <div className="mt-2">
+                                            <h3 className="text-2xl font-black text-warning-yellow font-mono">{formatDuration(colaboradorReportData.totalInactiveSeconds)}</h3>
+                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Fuera de registro</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Card 4: Tiempo Efectivo */}
+                                    <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[110px] bg-gradient-to-br from-success-green/15 to-transparent col-span-1">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-success-green">Tiempo Efectivo</span>
                                         <div className="mt-2">
                                             <h3 className="text-2xl font-black text-success-green font-mono">{formatDuration(colaboradorReportData.effectiveSeconds)}</h3>
-                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Descontando pausas de líneas</p>
+                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Descontando pausas</p>
                                         </div>
                                     </div>
 
-                                    <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[110px] bg-gradient-to-br from-primary-blue/10 to-transparent">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-primary-blue">Aprovechamiento Neto</span>
+                                    {/* Card 5: Aprovechamiento */}
+                                    <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[110px] bg-gradient-to-br from-pink-400/15 to-transparent col-span-2 lg:col-span-1">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-pink-400">Eficiencia Neto</span>
                                         <div className="mt-2">
-                                            <h3 className="text-2xl font-black text-white font-mono">
-                                                {colaboradorReportData.totalSeconds > 0
-                                                    ? ((colaboradorReportData.effectiveSeconds / colaboradorReportData.totalSeconds) * 100).toFixed(1)
-                                                    : '0.0'}%
+                                            <h3 className="text-2xl font-black text-pink-400 font-mono">
+                                                {colaboradorReportData.totalPermanenceSeconds > 0
+                                                    ? ((colaboradorReportData.effectiveSeconds / colaboradorReportData.totalPermanenceSeconds) * 100).toFixed(1)
+                                                    : colaboradorReportData.totalSeconds > 0
+                                                        ? ((colaboradorReportData.effectiveSeconds / colaboradorReportData.totalSeconds) * 100).toFixed(1)
+                                                        : '0.0'}%
                                             </h3>
-                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Proporción de tiempo productivo</p>
+                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Efectivo vs Planta</p>
                                         </div>
                                     </div>
                                 </div>
@@ -4119,6 +4273,42 @@ export default function AdminPage() {
                                                             </td>
                                                             <td className="p-4 text-right font-mono font-bold text-white">{formatDuration(item.totalDuration)}</td>
                                                             <td className="p-4 text-right font-mono font-bold text-success-green">{formatDuration(item.effectiveDuration)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Desglose de Periodos Inactivos */}
+                                <div className="glass rounded-3xl overflow-hidden border border-white/10 bg-white/5">
+                                    <div className="p-6 border-b border-white/5 bg-white/5 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                                        <h3 className="text-sm font-black uppercase text-white tracking-wider">Desglose de Periodos Inactivos (Fuera de Línea)</h3>
+                                        <span className="text-[10px] font-black uppercase text-warning-yellow bg-warning-yellow/10 border border-warning-yellow/20 px-3 py-1 rounded-full self-start sm:self-auto font-mono">
+                                            Total Inactivo: {formatDuration(colaboradorReportData.totalInactiveSeconds)}
+                                        </span>
+                                    </div>
+                                    {colaboradorReportData.inactiveGaps.length === 0 ? (
+                                        <div className="p-16 text-center text-gray-500 font-bold uppercase tracking-widest text-xs">No se registraron periodos de inactividad entre procesos en este rango</div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left text-xs whitespace-nowrap">
+                                                <thead>
+                                                    <tr className="bg-white/5 border-b border-white/10 text-[9px] font-black uppercase text-gray-500 tracking-wider">
+                                                        <th className="p-4">Fecha</th>
+                                                        <th className="p-4">Inicio de Inactividad</th>
+                                                        <th className="p-4">Fin de Inactividad</th>
+                                                        <th className="p-4 text-right">Duración Inactivo</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-white/5 text-gray-300 font-medium font-mono">
+                                                    {colaboradorReportData.inactiveGaps.map((gap: any) => (
+                                                        <tr key={gap.id} className="hover:bg-white/[0.01]">
+                                                            <td className="p-4 text-gray-400 font-sans font-bold">{gap.fecha}</td>
+                                                            <td className="p-4">{format(gap.inicio, 'HH:mm:ss')}</td>
+                                                            <td className="p-4">{format(gap.fin, 'HH:mm:ss')}</td>
+                                                            <td className="p-4 text-right text-warning-yellow font-bold">{formatDuration(gap.duracion)}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
