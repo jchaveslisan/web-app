@@ -329,6 +329,54 @@ export default function AdminPage() {
             const eventsSnapshot = await getDocs(eventsQ);
             const periodEvents = eventsSnapshot.docs.map(doc => doc.data() as any);
 
+            // Helper function to resolve exit/pause justification
+            const resolveMotiveAtTime = (time: number, processId: string, logHoraSalida: any, fallbackReason: string) => {
+                const logExitMs = logHoraSalida?.toMillis?.() || logHoraSalida?.seconds * 1000 || 0;
+                if (logExitMs > 0 && Math.abs(logExitMs - time) < 5000 && fallbackReason) {
+                    return fallbackReason;
+                }
+
+                const colabNombre = colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || '';
+                const matchingEvent = periodEvents.find(evt => {
+                    const evtTime = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                    const timeDiff = Math.abs(evtTime - time);
+                    if (timeDiff > 10000) return false;
+
+                    const eventText = (evt.evento || "").toUpperCase();
+                    const just = (evt.justificacion || "");
+
+                    if (eventText.includes("SALIDA DE PERSONAL")) {
+                        return just.toLowerCase().includes(colabNombre.toLowerCase()) || just.toLowerCase().includes(colaboradorReportId.toLowerCase());
+                    }
+                    if (eventText.includes("PAUSADO") || eventText.includes("SETUP FINALIZADO") || eventText.includes("PROCESO FINALIZADO")) {
+                        return evt.procesoId === processId;
+                    }
+                    return false;
+                });
+
+                if (matchingEvent) {
+                    const eventText = (matchingEvent.evento || "").toUpperCase();
+                    if (eventText.includes("SALIDA DE PERSONAL")) {
+                        let motiveText = matchingEvent.justificacion || "";
+                        if (motiveText.includes(":")) {
+                            motiveText = motiveText.split(":").slice(1).join(":").trim();
+                        }
+                        return motiveText;
+                    }
+                    if (eventText.includes("PAUSADO")) {
+                        return matchingEvent.justificacion || "Pausa de Proceso";
+                    }
+                    if (eventText.includes("SETUP FINALIZADO")) {
+                        return "Finalización de Setup";
+                    }
+                    if (eventText.includes("PROCESO FINALIZADO")) {
+                        return "Finalización de Proceso";
+                    }
+                }
+
+                return "";
+            };
+
             const dayLogs = rawLogs.filter(log => {
                 const entry = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
                 const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || Date.now();
@@ -428,42 +476,12 @@ export default function AdminPage() {
 
                 effectiveSeconds += logEffectiveDuration;
 
-                // Match checkout reason from events log or existing property
-                const logExitMs = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || 0;
-                let checkoutReason = log.justificacionSalida || "";
-                
-                if (logExitMs > 0 && !checkoutReason) {
-                    const colabNombre = colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || '';
-                    const matchingEvent = periodEvents.find(evt => {
-                        const evtTime = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
-                        const timeDiff = Math.abs(evtTime - logExitMs);
-                        if (timeDiff > 10000) return false;
-
-                        const eventText = (evt.evento || "").toUpperCase();
-                        const just = (evt.justificacion || "");
-
-                        if (eventText.includes("SALIDA DE PERSONAL")) {
-                            return just.toLowerCase().includes(colabNombre.toLowerCase()) || just.toLowerCase().includes(colaboradorReportId.toLowerCase());
-                        }
-                        if (eventText.includes("SETUP FINALIZADO") || eventText.includes("PROCESO FINALIZADO")) {
-                            return evt.procesoId === log.procesoId;
-                        }
-                        return false;
-                    });
-
-                    if (matchingEvent) {
-                        const eventText = (matchingEvent.evento || "").toUpperCase();
-                        if (eventText.includes("SALIDA DE PERSONAL")) {
-                            let motiveText = matchingEvent.justificacion || "";
-                            if (motiveText.includes(":")) {
-                                motiveText = motiveText.split(":").slice(1).join(":").trim();
-                            }
-                            checkoutReason = motiveText;
-                        } else if (eventText.includes("SETUP FINALIZADO")) {
-                            checkoutReason = "Finalización de Setup";
-                        } else if (eventText.includes("PROCESO FINALIZADO")) {
-                            checkoutReason = "Finalización de Proceso";
-                        }
+                // Resolve checkout/pause reason at overlapEnd
+                let checkoutReason = "";
+                if (log.horaSalida) {
+                    checkoutReason = resolveMotiveAtTime(overlapEnd, log.procesoId, log.horaSalida, log.justificacionSalida || "");
+                    if (!checkoutReason) {
+                        checkoutReason = "Salida Registrada";
                     }
                 }
 
@@ -562,42 +580,16 @@ export default function AdminPage() {
                                 return Math.abs(exit - gapStart) < 2000;
                             });
 
-                            // Try to find a matching exit/completion event in Firestore events log
-                            const colabNombre = colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || '';
-                            const matchingEvent = periodEvents.find(evt => {
-                                const evtTime = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
-                                const timeDiff = Math.abs(evtTime - gapStart);
-                                if (timeDiff > 10000) return false; // within 10 seconds range
-
-                                const eventText = (evt.evento || "").toUpperCase();
-                                const just = (evt.justificacion || "");
-
-                                if (eventText.includes("SALIDA DE PERSONAL")) {
-                                    return just.toLowerCase().includes(colabNombre.toLowerCase()) || just.toLowerCase().includes(colaboradorReportId.toLowerCase());
-                                }
-                                if (eventText.includes("SETUP FINALIZADO") || eventText.includes("PROCESO FINALIZADO")) {
-                                    return evt.procesoId === endingLog?.procesoId;
-                                }
-                                return false;
+                            const targetLog = endingLog || dayLogsForGaps.find(log => {
+                                const entry = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                                const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || Date.now();
+                                return entry <= gapStart && exit > gapStart;
                             });
 
-                            let reason = endingLog?.justificacionSalida || "";
-
-                            if (matchingEvent) {
-                                const eventText = (matchingEvent.evento || "").toUpperCase();
-                                if (eventText.includes("SALIDA DE PERSONAL")) {
-                                    let motiveText = matchingEvent.justificacion || "";
-                                    if (motiveText.includes(":")) {
-                                        motiveText = motiveText.split(":").slice(1).join(":").trim();
-                                    }
-                                    reason = motiveText;
-                                } else if (eventText.includes("SETUP FINALIZADO")) {
-                                    reason = "Finalización de Setup";
-                                } else if (eventText.includes("PROCESO FINALIZADO")) {
-                                    reason = "Finalización de Proceso";
-                                }
+                            let reason = "";
+                            if (targetLog) {
+                                reason = resolveMotiveAtTime(gapStart, targetLog.procesoId, targetLog.horaSalida, targetLog.justificacionSalida || "");
                             }
-
                             if (!reason) {
                                 reason = "Salida Registrada / Fin de turno";
                             }
@@ -626,43 +618,16 @@ export default function AdminPage() {
                                 return Math.abs(exit - lastExitTime) < 2000;
                             });
 
-                            // Resolve checkout reason for this last log
-                            let lastCheckoutReason = lastEndingLog?.motivoSalida || "";
-                            if (!lastCheckoutReason) {
-                                const colabNombre = colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || '';
-                                const matchingEvent = periodEvents.find(evt => {
-                                    const evtTime = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
-                                    const timeDiff = Math.abs(evtTime - lastExitTime);
-                                    if (timeDiff > 10000) return false;
+                            const lastTargetLog = lastEndingLog || dayLogsForGaps.find(log => {
+                                const entry = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                                const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || Date.now();
+                                return entry <= lastExitTime && exit > lastExitTime;
+                            });
 
-                                    const eventText = (evt.evento || "").toUpperCase();
-                                    const just = (evt.justificacion || "");
-
-                                    if (eventText.includes("SALIDA DE PERSONAL")) {
-                                        return just.toLowerCase().includes(colabNombre.toLowerCase()) || just.toLowerCase().includes(colaboradorReportId.toLowerCase());
-                                    }
-                                    if (eventText.includes("SETUP FINALIZADO") || eventText.includes("PROCESO FINALIZADO")) {
-                                        return evt.procesoId === lastEndingLog?.procesoId;
-                                    }
-                                    return false;
-                                });
-
-                                if (matchingEvent) {
-                                    const eventText = (matchingEvent.evento || "").toUpperCase();
-                                    if (eventText.includes("SALIDA DE PERSONAL")) {
-                                        let motiveText = matchingEvent.justificacion || "";
-                                        if (motiveText.includes(":")) {
-                                            motiveText = motiveText.split(":").slice(1).join(":").trim();
-                                        }
-                                        lastCheckoutReason = motiveText;
-                                    } else if (eventText.includes("SETUP FINALIZADO")) {
-                                        lastCheckoutReason = "Finalización de Setup";
-                                    } else if (eventText.includes("PROCESO FINALIZADO")) {
-                                        lastCheckoutReason = "Finalización de Proceso";
-                                    }
-                                }
+                            let lastCheckoutReason = "";
+                            if (lastTargetLog) {
+                                lastCheckoutReason = resolveMotiveAtTime(lastExitTime, lastTargetLog.procesoId, lastTargetLog.horaSalida, lastTargetLog.justificacionSalida || "");
                             }
-
                             if (!lastCheckoutReason) {
                                 lastCheckoutReason = "Salida Registrada";
                             }
