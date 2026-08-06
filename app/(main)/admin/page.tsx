@@ -503,12 +503,22 @@ export default function AdminPage() {
                         if (gapDuration >= 5000) { // Gaps longer than 5 seconds
                             const gapSecs = Math.floor(gapDuration / 1000);
                             totalInactiveSeconds += gapSecs;
+
+                            // Find the log that ended at gapStart (or close to it)
+                            const endingLog = dayLogsForGaps.find(log => {
+                                const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || Date.now();
+                                return Math.abs(exit - gapStart) < 2000;
+                            });
+
+                            const reason = endingLog?.justificacionSalida || "Salida Registrada / Fin de turno";
+
                             inactiveGaps.push({
                                 id: `${dStr}-${gapStart}`,
                                 fecha: format(new Date(tS), 'dd/MM/yyyy'),
                                 inicio: gapStart,
                                 fin: gapEnd,
-                                duracion: gapSecs
+                                duracion: gapSecs,
+                                motivo: reason
                             });
                         }
                     }
@@ -4299,6 +4309,7 @@ export default function AdminPage() {
                                                         <th className="p-4">Fecha</th>
                                                         <th className="p-4">Inicio de Inactividad</th>
                                                         <th className="p-4">Fin de Inactividad</th>
+                                                        <th className="p-4">Motivo / Causa de Salida</th>
                                                         <th className="p-4 text-right">Duración Inactivo</th>
                                                     </tr>
                                                 </thead>
@@ -4308,6 +4319,7 @@ export default function AdminPage() {
                                                             <td className="p-4 text-gray-400 font-sans font-bold">{gap.fecha}</td>
                                                             <td className="p-4">{format(gap.inicio, 'HH:mm:ss')}</td>
                                                             <td className="p-4">{format(gap.fin, 'HH:mm:ss')}</td>
+                                                            <td className="p-4 text-gray-200 uppercase font-sans font-bold">{gap.motivo}</td>
                                                             <td className="p-4 text-right text-warning-yellow font-bold">{formatDuration(gap.duracion)}</td>
                                                         </tr>
                                                     ))}

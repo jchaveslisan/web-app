@@ -283,7 +283,8 @@ export default function MonitoreoPage() {
             try {
                 const docRef = doc(db, 'colaboradores_log', pendingExitLog.id);
                 await updateDoc(docRef, {
-                    horaSalida: Timestamp.now()
+                    horaSalida: Timestamp.now(),
+                    justificacionSalida: justificacion || "Salida manual"
                 });
                 clearActiveColaboradoresCache();
                 const updatesToProcess: any = {
@@ -350,7 +351,8 @@ export default function MonitoreoPage() {
                 const activos = colaboradores.filter(c => !c.horaSalida);
                 for (const colab of activos) {
                     await updateDoc(doc(db, 'colaboradores_log', colab.id), {
-                        horaSalida: now
+                        horaSalida: now,
+                        justificacionSalida: "Finalización de Setup"
                     });
                 }
                 clearActiveColaboradoresCache();
@@ -483,7 +485,8 @@ export default function MonitoreoPage() {
             const activos = colaboradores.filter(c => !c.horaSalida);
             for (const colab of activos) {
                 await updateDoc(doc(db, 'colaboradores_log', colab.id), {
-                    horaSalida: now
+                    horaSalida: now,
+                    justificacionSalida: "Proceso Finalizado"
                 });
             }
             clearActiveColaboradoresCache();
