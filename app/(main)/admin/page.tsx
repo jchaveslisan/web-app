@@ -428,6 +428,45 @@ export default function AdminPage() {
 
                 effectiveSeconds += logEffectiveDuration;
 
+                // Match checkout reason from events log or existing property
+                const logExitMs = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || 0;
+                let checkoutReason = log.justificacionSalida || "";
+                
+                if (logExitMs > 0 && !checkoutReason) {
+                    const colabNombre = colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || '';
+                    const matchingEvent = periodEvents.find(evt => {
+                        const evtTime = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                        const timeDiff = Math.abs(evtTime - logExitMs);
+                        if (timeDiff > 10000) return false;
+
+                        const eventText = (evt.evento || "").toUpperCase();
+                        const just = (evt.justificacion || "");
+
+                        if (eventText.includes("SALIDA DE PERSONAL")) {
+                            return just.toLowerCase().includes(colabNombre.toLowerCase()) || just.toLowerCase().includes(colaboradorReportId.toLowerCase());
+                        }
+                        if (eventText.includes("SETUP FINALIZADO") || eventText.includes("PROCESO FINALIZADO")) {
+                            return evt.procesoId === log.procesoId;
+                        }
+                        return false;
+                    });
+
+                    if (matchingEvent) {
+                        const eventText = (matchingEvent.evento || "").toUpperCase();
+                        if (eventText.includes("SALIDA DE PERSONAL")) {
+                            let motiveText = matchingEvent.justificacion || "";
+                            if (motiveText.includes(":")) {
+                                motiveText = motiveText.split(":").slice(1).join(":").trim();
+                            }
+                            checkoutReason = motiveText;
+                        } else if (eventText.includes("SETUP FINALIZADO")) {
+                            checkoutReason = "Finalización de Setup";
+                        } else if (eventText.includes("PROCESO FINALIZADO")) {
+                            checkoutReason = "Finalización de Proceso";
+                        }
+                    }
+                }
+
                 breakdown.push({
                     id: log.id,
                     op: process.ordenProduccion,
@@ -438,7 +477,8 @@ export default function AdminPage() {
                     exit: log.horaSalida ? new Date(overlapEnd) : null,
                     totalDuration: logTotalDuration,
                     effectiveDuration: logEffectiveDuration,
-                    estadoProceso: process.estado
+                    estadoProceso: process.estado,
+                    motivoSalida: checkoutReason
                 });
             });
 
@@ -519,64 +559,45 @@ export default function AdminPage() {
                                 return Math.abs(exit - gapStart) < 2000;
                             });
 
-                             // Try to find a matching exit/completion event in Firestore events log
-                             const colabNombre = colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || '';
-                             const cleanText = (str: string) => 
-                                 (str || "").normalize("NFD")
-                                           .replace(/[\u0300-\u036f]/g, "")
-                                           .toLowerCase();
+                            // Try to find a matching exit/completion event in Firestore events log
+                            const colabNombre = colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || '';
+                            const matchingEvent = periodEvents.find(evt => {
+                                const evtTime = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                                const timeDiff = Math.abs(evtTime - gapStart);
+                                if (timeDiff > 10000) return false; // within 10 seconds range
 
-                             const cleanColabName = cleanText(colabNombre);
-                             const cleanColabId = cleanText(colaboradorReportId);
+                                const eventText = (evt.evento || "").toUpperCase();
+                                const just = (evt.justificacion || "");
 
-                             // Find all matching events of the day
-                             const candidateEvents = periodEvents.filter(evt => {
-                                 const eventText = (evt.evento || "").toUpperCase();
-                                 const just = (evt.justificacion || "");
+                                if (eventText.includes("SALIDA DE PERSONAL")) {
+                                    return just.toLowerCase().includes(colabNombre.toLowerCase()) || just.toLowerCase().includes(colaboradorReportId.toLowerCase());
+                                }
+                                if (eventText.includes("SETUP FINALIZADO") || eventText.includes("PROCESO FINALIZADO")) {
+                                    return evt.procesoId === endingLog?.procesoId;
+                                }
+                                return false;
+                            });
 
-                                 if (eventText.includes("SALIDA DE PERSONAL")) {
-                                     const cleanJust = cleanText(just);
-                                     return cleanJust.includes(cleanColabName) || cleanJust.includes(cleanColabId);
-                                 }
-                                 if (eventText.includes("SETUP FINALIZADO") || eventText.includes("PROCESO FINALIZADO")) {
-                                     return evt.procesoId === endingLog?.procesoId;
-                                 }
-                                 return false;
-                             });
+                            let reason = endingLog?.justificacionSalida || "";
 
-                             // Find the candidate event closest to gapStart
-                             let matchingEvent: any = null;
-                             let minTimeDiff = Infinity;
+                            if (matchingEvent) {
+                                const eventText = (matchingEvent.evento || "").toUpperCase();
+                                if (eventText.includes("SALIDA DE PERSONAL")) {
+                                    let motiveText = matchingEvent.justificacion || "";
+                                    if (motiveText.includes(":")) {
+                                        motiveText = motiveText.split(":").slice(1).join(":").trim();
+                                    }
+                                    reason = motiveText;
+                                } else if (eventText.includes("SETUP FINALIZADO")) {
+                                    reason = "Finalización de Setup";
+                                } else if (eventText.includes("PROCESO FINALIZADO")) {
+                                    reason = "Finalización de Proceso";
+                                }
+                            }
 
-                             candidateEvents.forEach(evt => {
-                                 const evtTime = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
-                                 const timeDiff = Math.abs(evtTime - gapStart);
-                                 if (timeDiff < minTimeDiff && timeDiff <= 120000) { // within 2 minutes
-                                     minTimeDiff = timeDiff;
-                                     matchingEvent = evt;
-                                 }
-                             });
-
-                             let reason = endingLog?.justificacionSalida || "";
-
-                             if (matchingEvent) {
-                                 const eventText = (matchingEvent.evento || "").toUpperCase();
-                                 if (eventText.includes("SALIDA DE PERSONAL")) {
-                                     let motiveText = matchingEvent.justificacion || "";
-                                     if (motiveText.includes(":")) {
-                                         motiveText = motiveText.split(":").slice(1).join(":").trim();
-                                     }
-                                     reason = motiveText;
-                                 } else if (eventText.includes("SETUP FINALIZADO")) {
-                                     reason = "Finalización de Setup";
-                                 } else if (eventText.includes("PROCESO FINALIZADO")) {
-                                     reason = "Finalización de Proceso";
-                                 }
-                             }
-
-                             if (!reason) {
-                                 reason = "Salida Registrada / Fin de turno";
-                             }
+                            if (!reason) {
+                                reason = "Salida Registrada / Fin de turno";
+                            }
 
                             inactiveGaps.push({
                                 id: `${dStr}-${gapStart}`,
@@ -4337,8 +4358,19 @@ export default function AdminPage() {
                                                             <td className="p-4 uppercase text-gray-400 font-bold max-w-xs truncate">{item.producto || 'N/A'}</td>
                                                             <td className="p-4 font-mono">{format(item.entry, 'dd/MM/yyyy HH:mm:ss')}</td>
                                                             <td className="p-4 font-mono">
-                                                                {item.exit ? format(item.exit, 'dd/MM/yyyy HH:mm:ss') : (item.estadoProceso === 'Iniciado' ? <span className="text-success-green animate-pulse">ACTIVO</span> : '-')}
-                                                            </td>
+                                                                 {item.exit ? (
+                                                                     <div>
+                                                                         <div>{format(item.exit, 'dd/MM/yyyy HH:mm:ss')}</div>
+                                                                         {item.motivoSalida && (
+                                                                             <span className="inline-block text-[8px] font-black text-warning-yellow uppercase bg-warning-yellow/10 border border-warning-yellow/20 px-2 py-0.5 rounded mt-1 font-sans">
+                                                                                 {item.motivoSalida}
+                                                                             </span>
+                                                                         )}
+                                                                     </div>
+                                                                 ) : (
+                                                                     item.estadoProceso === 'Iniciado' ? <span className="text-success-green animate-pulse">ACTIVO</span> : '-'
+                                                                 )}
+                                                             </td>
                                                             <td className="p-4 text-center">
                                                                 <span className={cn(
                                                                     "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border",
