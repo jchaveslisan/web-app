@@ -482,6 +482,9 @@ export default function AdminPage() {
                 });
             });
 
+            // Sort breakdown chronologically (entry ascending)
+            breakdown.sort((a, b) => a.entry.getTime() - b.entry.getTime());
+
             // Group and calculate linear presence and gaps per day
             let totalPermanenceSeconds = 0;
             let totalInactiveSeconds = 0;
@@ -607,6 +610,77 @@ export default function AdminPage() {
                                 duracion: gapSecs,
                                 motivo: reason
                             });
+                        }
+                    }
+
+                    // Check if the very last checkout of the day was temporary (and they did not register again)
+                    if (merged.length > 0) {
+                        const lastInterval = merged[merged.length - 1];
+                        const lastExitTime = lastInterval.end;
+                        
+                        // But only check if the last checkout is not the end of the day (23:59:59)
+                        if (lastExitTime < tE - 5000) {
+                            // Find the log that ended at lastExitTime
+                            const lastEndingLog = dayLogsForGaps.find(log => {
+                                const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || Date.now();
+                                return Math.abs(exit - lastExitTime) < 2000;
+                            });
+
+                            // Resolve checkout reason for this last log
+                            let lastCheckoutReason = lastEndingLog?.motivoSalida || "";
+                            if (!lastCheckoutReason) {
+                                const colabNombre = colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || '';
+                                const matchingEvent = periodEvents.find(evt => {
+                                    const evtTime = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                                    const timeDiff = Math.abs(evtTime - lastExitTime);
+                                    if (timeDiff > 10000) return false;
+
+                                    const eventText = (evt.evento || "").toUpperCase();
+                                    const just = (evt.justificacion || "");
+
+                                    if (eventText.includes("SALIDA DE PERSONAL")) {
+                                        return just.toLowerCase().includes(colabNombre.toLowerCase()) || just.toLowerCase().includes(colaboradorReportId.toLowerCase());
+                                    }
+                                    if (eventText.includes("SETUP FINALIZADO") || eventText.includes("PROCESO FINALIZADO")) {
+                                        return evt.procesoId === lastEndingLog?.procesoId;
+                                    }
+                                    return false;
+                                });
+
+                                if (matchingEvent) {
+                                    const eventText = (matchingEvent.evento || "").toUpperCase();
+                                    if (eventText.includes("SALIDA DE PERSONAL")) {
+                                        let motiveText = matchingEvent.justificacion || "";
+                                        if (motiveText.includes(":")) {
+                                            motiveText = motiveText.split(":").slice(1).join(":").trim();
+                                        }
+                                        lastCheckoutReason = motiveText;
+                                    } else if (eventText.includes("SETUP FINALIZADO")) {
+                                        lastCheckoutReason = "Finalización de Setup";
+                                    } else if (eventText.includes("PROCESO FINALIZADO")) {
+                                        lastCheckoutReason = "Finalización de Proceso";
+                                    }
+                                }
+                            }
+
+                            if (!lastCheckoutReason) {
+                                lastCheckoutReason = "Salida Registrada";
+                            }
+
+                            const upperReason = lastCheckoutReason.toUpperCase();
+                            const isFinalExit = upperReason.includes("JORNADA") || upperReason.includes("TURNO") || upperReason.includes("FINALIZADO");
+
+                            if (!isFinalExit) {
+                                // Yes, they checked out for a temporary reason but never checked back in!
+                                inactiveGaps.push({
+                                    id: `${dStr}-last-no-return`,
+                                    fecha: format(new Date(tS), 'dd/MM/yyyy'),
+                                    inicio: lastExitTime,
+                                    fin: null, // Indicates they did not return
+                                    duracion: null, // Indicates N/A
+                                    motivo: lastCheckoutReason
+                                });
+                            }
                         }
                     }
                 }
