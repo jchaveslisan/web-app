@@ -2540,6 +2540,7 @@ export default function AdminPage() {
                                 const totalReprocesoSeconds = procesosOP.reduce((sum, p) => sum + (p.tiempoReprocesoSegundos || 0), 0);
                                 
                                 // Pause calculations
+                                const pauseDurationsByReason: Record<string, number> = {};
                                 let totalPauseSeconds = 0;
                                 const sortedEvents = [...resumenEvents].sort((a, b) => {
                                     const timeA = a.horaEvento?.toMillis?.() || a.horaEvento?.seconds * 1000 || 0;
@@ -2547,16 +2548,25 @@ export default function AdminPage() {
                                     return timeA - timeB;
                                 });
                                 
-                                let pauseStartMap: Record<string, number> = {};
+                                let pauseStartMap: Record<string, { timeMs: number; reason: string }> = {};
                                 sortedEvents.forEach(evt => {
                                     const eventText = (evt.evento || "").toUpperCase();
                                     const processId = evt.procesoId;
                                     const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                                    const reason = evt.justificacion || "Pausa Automática";
                                     
-                                    if (eventText.includes('PAUSA')) {
-                                        pauseStartMap[processId] = timeMs;
-                                    } else if (eventText.includes('REANUDA') && pauseStartMap[processId]) {
-                                        totalPauseSeconds += Math.floor((timeMs - pauseStartMap[processId]) / 1000);
+                                    // Exclude "Acumulado" as a cause of pause (Requirement #2)
+                                    if (reason.toUpperCase().includes("ACUMULADO")) {
+                                        return;
+                                    }
+
+                                    if (eventText.includes('PROCESO PAUSADO')) {
+                                        pauseStartMap[processId] = { timeMs, reason };
+                                    } else if ((eventText.includes('REANUDA') || eventText.includes('FINALIZADO')) && pauseStartMap[processId]) {
+                                        const duration = Math.floor((timeMs - pauseStartMap[processId].timeMs) / 1000);
+                                        const r = pauseStartMap[processId].reason;
+                                        pauseDurationsByReason[r] = (pauseDurationsByReason[r] || 0) + duration;
+                                        totalPauseSeconds += duration;
                                         delete pauseStartMap[processId];
                                     }
                                 });
@@ -2564,7 +2574,10 @@ export default function AdminPage() {
                                 Object.keys(pauseStartMap).forEach(procId => {
                                     const relatedProc = procesosOP.find(p => p.id === procId);
                                     if (relatedProc && relatedProc.estado === 'Pausado') {
-                                        totalPauseSeconds += Math.floor((Date.now() - pauseStartMap[procId]) / 1000);
+                                        const duration = Math.floor((Date.now() - pauseStartMap[procId].timeMs) / 1000);
+                                        const r = pauseStartMap[procId].reason;
+                                        pauseDurationsByReason[r] = (pauseDurationsByReason[r] || 0) + duration;
+                                        totalPauseSeconds += duration;
                                     }
                                 });
 
@@ -2716,6 +2729,39 @@ export default function AdminPage() {
                                                     <p className="text-[9px] text-gray-500 font-bold uppercase mt-0.5">Esfuerzo real de mano de obra en marcha</p>
                                                 </div>
                                             </div>
+                                        </div>
+
+                                        {/* Detalle de Pausas por Motivo */}
+                                        <div className="glass p-6 rounded-3xl border border-white/10 bg-white/5 space-y-6">
+                                            <h3 className="text-lg font-black uppercase text-warning-yellow flex items-center gap-2">
+                                                <Pause className="h-5 w-5" /> DESGLOSE DETALLADO DE PAUSAS Y TIEMPOS MUERTOS
+                                            </h3>
+                                            
+                                            {Object.keys(pauseDurationsByReason).length === 0 ? (
+                                                <p className="text-sm text-gray-500 italic text-center py-6">No se registraron interrupciones o pausas en esta orden de producción.</p>
+                                            ) : (
+                                                <div className="space-y-4">
+                                                    {Object.entries(pauseDurationsByReason)
+                                                        .sort((a, b) => b[1] - a[1]) // Sort descending by duration
+                                                        .map(([reason, seconds]) => {
+                                                            const percentage = totalPauseSeconds > 0 ? (seconds / totalPauseSeconds) * 100 : 0;
+                                                            return (
+                                                                <div key={reason} className="space-y-2">
+                                                                    <div className="flex justify-between items-center text-xs lg:text-sm font-bold">
+                                                                        <span className="text-white uppercase tracking-tight">{reason}</span>
+                                                                        <span className="text-warning-yellow font-mono font-black">{formatDuration(seconds)} ({percentage.toFixed(1)}%)</span>
+                                                                    </div>
+                                                                    <div className="w-full bg-white/5 rounded-full h-2 overflow-hidden border border-white/5">
+                                                                        <div 
+                                                                            className="bg-warning-yellow h-full rounded-full transition-all duration-500" 
+                                                                            style={{ width: `${percentage}%` }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Comentarios de la OP */}
