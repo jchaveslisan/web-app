@@ -4464,15 +4464,40 @@ export default function AdminPage() {
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-white/5 text-gray-300 font-medium font-mono">
-                                                    {colaboradorReportData.inactiveGaps.map((gap: any) => (
-                                                        <tr key={gap.id} className="hover:bg-white/[0.01]">
-                                                            <td className="p-4 text-gray-400 font-sans font-bold">{gap.fecha}</td>
-                                                            <td className="p-4">{format(gap.inicio, 'HH:mm:ss')}</td>
-                                                            <td className="p-4">{format(gap.fin, 'HH:mm:ss')}</td>
-                                                            <td className="p-4 text-gray-200 uppercase font-sans font-bold">{gap.motivo}</td>
-                                                            <td className="p-4 text-right text-warning-yellow font-bold">{formatDuration(gap.duracion)}</td>
-                                                        </tr>
-                                                    ))}
+                                                    {colaboradorReportData.inactiveGaps.map((gap: any, idx: number) => {
+                                                        const isLastGapOfToday = !colaboradorReportData.inactiveGaps.some((other: any, otherIdx: number) => {
+                                                            if (otherIdx <= idx) return false;
+                                                            return other.fecha === gap.fecha;
+                                                        });
+                                                        return (
+                                                            <tr key={gap.id} className="hover:bg-white/[0.01]">
+                                                                <td className="p-4 text-gray-400 font-sans font-bold">{gap.fecha}</td>
+                                                                <td className="p-4">{format(gap.inicio, 'HH:mm:ss')}</td>
+                                                                <td className="p-4">
+                                                                    {gap.fin ? (
+                                                                        format(gap.fin, 'HH:mm:ss')
+                                                                    ) : (
+                                                                        <span className="inline-block text-[9px] font-black text-danger-red uppercase bg-danger-red/10 border border-danger-red/20 px-2 py-0.5 rounded font-sans animate-pulse">
+                                                                            NO REGRESÓ / FIN JORNADA
+                                                                        </span>
+                                                                    )}
+                                                                </td>
+                                                                <td className="p-4">
+                                                                    <div className="flex flex-wrap items-center gap-2">
+                                                                        <span className="text-gray-200 uppercase font-sans font-bold">{gap.motivo}</span>
+                                                                        {isLastGapOfToday && (
+                                                                            <span className="inline-block text-[8px] font-black text-pink-400 uppercase bg-pink-400/10 border border-pink-400/20 px-2 py-0.5 rounded font-sans animate-pulse">
+                                                                                ÚLTIMA SALIDA DEL DÍA
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                                <td className="p-4 text-right text-warning-yellow font-bold">
+                                                                    {gap.duracion !== null ? formatDuration(gap.duracion) : '-'}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
                                                 </tbody>
                                             </table>
                                         </div>
