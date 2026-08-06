@@ -320,6 +320,15 @@ export default function AdminPage() {
             const snapshot = await getDocs(q);
             const rawLogs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
 
+            // Query events log in this date range to fetch historical check-out motives
+            const eventsQ = query(
+                collection(db, 'eventos_log'),
+                where('horaEvento', '>=', dayStart),
+                where('horaEvento', '<=', dayEnd)
+            );
+            const eventsSnapshot = await getDocs(eventsQ);
+            const periodEvents = eventsSnapshot.docs.map(doc => doc.data() as any);
+
             const dayLogs = rawLogs.filter(log => {
                 const entry = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
                 const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || Date.now();
@@ -510,7 +519,45 @@ export default function AdminPage() {
                                 return Math.abs(exit - gapStart) < 2000;
                             });
 
-                            const reason = endingLog?.justificacionSalida || "Salida Registrada / Fin de turno";
+                            // Try to find a matching exit/completion event in Firestore events log
+                            const colabNombre = colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || '';
+                            const matchingEvent = periodEvents.find(evt => {
+                                const evtTime = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                                const timeDiff = Math.abs(evtTime - gapStart);
+                                if (timeDiff > 10000) return false; // within 10 seconds range
+
+                                const eventText = (evt.evento || "").toUpperCase();
+                                const just = (evt.justificacion || "");
+
+                                if (eventText.includes("SALIDA DE PERSONAL")) {
+                                    return just.toLowerCase().includes(colabNombre.toLowerCase()) || just.toLowerCase().includes(colaboradorReportId.toLowerCase());
+                                }
+                                if (eventText.includes("SETUP FINALIZADO") || eventText.includes("PROCESO FINALIZADO")) {
+                                    return evt.procesoId === endingLog?.procesoId;
+                                }
+                                return false;
+                            });
+
+                            let reason = endingLog?.justificacionSalida || "";
+
+                            if (matchingEvent) {
+                                const eventText = (matchingEvent.evento || "").toUpperCase();
+                                if (eventText.includes("SALIDA DE PERSONAL")) {
+                                    let motiveText = matchingEvent.justificacion || "";
+                                    if (motiveText.includes(":")) {
+                                        motiveText = motiveText.split(":").slice(1).join(":").trim();
+                                    }
+                                    reason = motiveText;
+                                } else if (eventText.includes("SETUP FINALIZADO")) {
+                                    reason = "Finalización de Setup";
+                                } else if (eventText.includes("PROCESO FINALIZADO")) {
+                                    reason = "Finalización de Proceso";
+                                }
+                            }
+
+                            if (!reason) {
+                                reason = "Salida Registrada / Fin de turno";
+                            }
 
                             inactiveGaps.push({
                                 id: `${dStr}-${gapStart}`,
