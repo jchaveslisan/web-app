@@ -4388,40 +4388,53 @@ export default function AdminPage() {
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-white/5 text-gray-300 font-medium">
-                                                    {colaboradorReportData.breakdown.map((item: any) => (
-                                                        <tr key={item.id} className="hover:bg-white/[0.01]">
-                                                            <td className="p-4">
-                                                                <div className="font-bold text-white uppercase font-mono">{item.op}</div>
-                                                                <span className="inline-block bg-white/5 border border-white/10 text-[8px] font-black text-pink-400 px-2 py-0.5 rounded uppercase mt-1 tracking-wider">{item.etapa}</span>
-                                                            </td>
-                                                            <td className="p-4 uppercase text-gray-400 font-bold max-w-xs truncate">{item.producto || 'N/A'}</td>
-                                                            <td className="p-4 font-mono">{format(item.entry, 'dd/MM/yyyy HH:mm:ss')}</td>
-                                                            <td className="p-4 font-mono">
-                                                                 {item.exit ? (
-                                                                     <div>
-                                                                         <div>{format(item.exit, 'dd/MM/yyyy HH:mm:ss')}</div>
-                                                                         {item.motivoSalida && (
-                                                                             <span className="inline-block text-[8px] font-black text-warning-yellow uppercase bg-warning-yellow/10 border border-warning-yellow/20 px-2 py-0.5 rounded mt-1 font-sans">
-                                                                                 {item.motivoSalida}
-                                                                             </span>
-                                                                         )}
-                                                                     </div>
-                                                                 ) : (
-                                                                     item.estadoProceso === 'Iniciado' ? <span className="text-success-green animate-pulse">ACTIVO</span> : '-'
-                                                                 )}
-                                                             </td>
-                                                            <td className="p-4 text-center">
-                                                                <span className={cn(
-                                                                    "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border",
-                                                                    item.tipo === 'setup' ? "bg-accent-purple/10 border-accent-purple/20 text-accent-purple" : "bg-primary-blue/10 border-primary-blue/20 text-primary-blue"
-                                                                )}>
-                                                                    {item.tipo}
-                                                                </span>
-                                                            </td>
-                                                            <td className="p-4 text-right font-mono font-bold text-white">{formatDuration(item.totalDuration)}</td>
-                                                            <td className="p-4 text-right font-mono font-bold text-success-green">{formatDuration(item.effectiveDuration)}</td>
-                                                        </tr>
-                                                    ))}
+                                                    {colaboradorReportData.breakdown.map((item: any, idx: number) => {
+                                                        const isLastOfToday = !colaboradorReportData.breakdown.some((other: any, otherIdx: number) => {
+                                                            if (otherIdx <= idx) return false;
+                                                            return format(other.entry, 'dd/MM/yyyy') === format(item.entry, 'dd/MM/yyyy');
+                                                        });
+                                                        return (
+                                                            <tr key={item.id} className="hover:bg-white/[0.01]">
+                                                                <td className="p-4">
+                                                                    <div className="font-bold text-white uppercase font-mono">{item.op}</div>
+                                                                    <span className="inline-block bg-white/5 border border-white/10 text-[8px] font-black text-pink-400 px-2 py-0.5 rounded uppercase mt-1 tracking-wider">{item.etapa}</span>
+                                                                </td>
+                                                                <td className="p-4 uppercase text-gray-400 font-bold max-w-xs truncate">{item.producto || 'N/A'}</td>
+                                                                <td className="p-4 font-mono">{format(item.entry, 'dd/MM/yyyy HH:mm:ss')}</td>
+                                                                <td className="p-4 font-mono">
+                                                                    {item.exit ? (
+                                                                        <div>
+                                                                            <div>{format(item.exit, 'dd/MM/yyyy HH:mm:ss')}</div>
+                                                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                                                {item.motivoSalida && (
+                                                                                    <span className="inline-block text-[8px] font-black text-warning-yellow uppercase bg-warning-yellow/10 border border-warning-yellow/20 px-2 py-0.5 rounded font-sans">
+                                                                                        {item.motivoSalida}
+                                                                                    </span>
+                                                                                )}
+                                                                                {isLastOfToday && (
+                                                                                    <span className="inline-block text-[8px] font-black text-pink-400 uppercase bg-pink-400/10 border border-pink-400/20 px-2 py-0.5 rounded font-sans">
+                                                                                        ÚLTIMA SALIDA DEL DÍA
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : (
+                                                                        item.estadoProceso === 'Iniciado' ? <span className="text-success-green animate-pulse">ACTIVO</span> : '-'
+                                                                    )}
+                                                                </td>
+                                                                <td className="p-4 text-center">
+                                                                    <span className={cn(
+                                                                        "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border",
+                                                                        item.tipo === 'setup' ? "bg-accent-purple/10 border-accent-purple/20 text-accent-purple" : "bg-primary-blue/10 border-primary-blue/20 text-primary-blue"
+                                                                    )}>
+                                                                        {item.tipo}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="p-4 text-right font-mono font-bold text-white">{formatDuration(item.totalDuration)}</td>
+                                                                <td className="p-4 text-right font-mono font-bold text-success-green">{formatDuration(item.effectiveDuration)}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
                                                 </tbody>
                                             </table>
                                         </div>
