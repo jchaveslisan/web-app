@@ -50,6 +50,7 @@ export default function ProcesosPage() {
         'Finalizado': false
     });
     const [refreshKey, setRefreshKey] = useState(0);
+    const [isMounted, setIsMounted] = useState(false);
     const [colaboradoresPorProceso, setColaboradoresPorProceso] = useState<Record<string, any[]>>({});
     const [allColaboradores, setAllColaboradores] = useState<any[]>([]);
     const [activeLogs, setActiveLogs] = useState<any[]>([]);
@@ -57,12 +58,15 @@ export default function ProcesosPage() {
     const user = useAuthStore(state => state.user);
     const router = useRouter();
 
-    const [activeTab, setActiveTab] = useState<TipoProceso | 'personal'>(() => {
-        if (typeof window !== 'undefined') {
-            return (localStorage.getItem('activeProcesosTab') as any) || 'empaque';
+    const [activeTab, setActiveTab] = useState<TipoProceso | 'personal'>('empaque');
+
+    // Cargar pestaña de localStorage al montar en el cliente
+    useEffect(() => {
+        const savedTab = localStorage.getItem('activeProcesosTab') as TipoProceso | 'personal';
+        if (savedTab) {
+            setActiveTab(savedTab);
         }
-        return 'empaque';
-    });
+    }, []);
 
     // Guardar la pestaña cuando cambia
     useEffect(() => {
@@ -78,6 +82,7 @@ export default function ProcesosPage() {
 
     // Re-renderizar cada segundo para actualizar temporizador y unidades
     useEffect(() => {
+        setIsMounted(true);
         const timer = setInterval(() => {
             setRefreshKey(prev => prev + 1);
         }, 1000);
@@ -611,16 +616,18 @@ export default function ProcesosPage() {
                                                             <td className="p-5 text-center">
                                                                 <div className="flex flex-col items-center gap-1">
                                                                     <span className="text-sm font-bold text-success-green">
-                                                                        {proceso.utilizaTemporizador ?
+                                                                        {!isMounted ? '...' : (proceso.utilizaTemporizador ?
                                                                             `${getUnidadesPendientes(proceso).toLocaleString('es-ES', { maximumFractionDigits: 1 })} / ${proceso.cantidadProducir}`
-                                                                            : 'N/A'
+                                                                            : 'N/A')
                                                                         }
                                                                     </span>
                                                                 </div>
                                                             </td>
                                                             <td className="p-5 text-center">
                                                                 <div className="flex flex-col items-center gap-2">
-                                                                    {proceso.utilizaTemporizador ? (
+                                                                    {!isMounted ? (
+                                                                        <span className="text-lg font-bold font-mono text-gray-500">...</span>
+                                                                    ) : proceso.utilizaTemporizador ? (
                                                                         (() => {
                                                                             const colabs = colaboradoresPorProceso[proceso.id] || [];
                                                                             const activos = colabs.filter((c: any) => !c.horaSalida && c.tipo === 'colaborador');
