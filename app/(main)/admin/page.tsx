@@ -81,6 +81,11 @@ const adminSections = [
 export default function AdminPage() {
     const [tab, setTab] = useState<'hub' | 'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios' | 'ordenes' | 'reportes' | 'resumen' | 'articulos' | 'reporteFechas' | 'motivosCorreccion' | 'compararArticulos' | 'historialColaborador'>('hub');
     
+    const isPauseExcluded = (reason: string) => {
+        const r = reason.toLowerCase();
+        return r.includes('no quedar colaboradores activos') || r.includes('fin de jornada');
+    };
+    
     // Date Range Report States
     const [reportStartDate, setReportStartDate] = useState('');
     const [reportEndDate, setReportEndDate] = useState('');
@@ -710,7 +715,7 @@ export default function AdminPage() {
                         if (eventText.includes('PAUSA')) {
                             procPauseStart = { timeMs, reason: evt.justificacion || '' };
                         } else if (eventText.includes('REANUDA') && procPauseStart) {
-                            const isExcluded = procPauseStart.reason.toLowerCase().includes('no quedar colaboradores activos');
+                            const isExcluded = isPauseExcluded(procPauseStart.reason);
                             if (!isExcluded) {
                                 procPauseSeconds += Math.floor((timeMs - procPauseStart.timeMs) / 1000);
                             }
@@ -719,7 +724,7 @@ export default function AdminPage() {
                     });
                     if (procPauseStart && p.estado === 'Pausado') {
                         const start = procPauseStart as any;
-                        const isExcluded = start.reason.toLowerCase().includes('no quedar colaboradores activos');
+                        const isExcluded = isPauseExcluded(start.reason);
                         if (!isExcluded) {
                             procPauseSeconds += Math.floor((Date.now() - start.timeMs) / 1000);
                         }
@@ -972,7 +977,7 @@ export default function AdminPage() {
                     };
                 }
                 if (eventText.includes('REANUDA') && pauseStart) {
-                    const isExcluded = pauseStart.reason.toLowerCase().includes('no quedar colaboradores activos');
+                    const isExcluded = isPauseExcluded(pauseStart.reason);
                     if (!isExcluded) {
                         totalPauseDuration += Math.floor((getMs(evt.horaEvento) - pauseStart.timeMs) / 1000);
                     }
@@ -1041,7 +1046,7 @@ export default function AdminPage() {
                     };
                 }
                 if (eventText.includes('REANUDA') && localPauseStart) {
-                    const isExcluded = localPauseStart.reason.toLowerCase().includes('no quedar colaboradores activos');
+                    const isExcluded = isPauseExcluded(localPauseStart.reason);
                     if (!isExcluded) {
                         const dur = (getMs(evt.horaEvento) - localPauseStart.time) / 1000;
                         pauseDetails[localPauseStart.reason] = (pauseDetails[localPauseStart.reason] || 0) + dur;
@@ -2822,8 +2827,7 @@ export default function AdminPage() {
                                         return;
                                     }
 
-                                    // Exclude automatic pauses when no active collaborators remain
-                                    if (reason.toLowerCase().includes("no quedar colaboradores activos")) {
+                                    if (isPauseExcluded(reason)) {
                                         return;
                                     }
 
@@ -3103,7 +3107,7 @@ export default function AdminPage() {
                                                     if (eventText.includes('PAUSA')) {
                                                         procPauseStart = { timeMs, reason: evt.justificacion || '' };
                                                     } else if (eventText.includes('REANUDA') && procPauseStart) {
-                                                        const isExcluded = procPauseStart.reason.toLowerCase().includes('no quedar colaboradores activos');
+                                                        const isExcluded = isPauseExcluded(procPauseStart.reason);
                                                         if (!isExcluded) {
                                                             procPauseSeconds += Math.floor((timeMs - procPauseStart.timeMs) / 1000);
                                                         }
@@ -3112,7 +3116,7 @@ export default function AdminPage() {
                                                 });
                                                 if (procPauseStart && p.estado === 'Pausado') {
                                                     const start = procPauseStart as any;
-                                                    const isExcluded = start.reason.toLowerCase().includes('no quedar colaboradores activos');
+                                                    const isExcluded = isPauseExcluded(start.reason);
                                                     if (!isExcluded) {
                                                         procPauseSeconds += Math.floor((Date.now() - start.timeMs) / 1000);
                                                     }
@@ -3406,7 +3410,7 @@ export default function AdminPage() {
                                         pauseStart = timeMs;
                                         lastJustification = evt.justificacion || 'Sin justificar';
                                         const isAcumulado = lastJustification.toUpperCase().includes('ACUMULADO');
-                                        const isExcluded = lastJustification.toLowerCase().includes('no quedar colaboradores activos');
+                                        const isExcluded = isPauseExcluded(lastJustification);
                                         if (!isAcumulado && !isExcluded) {
                                             if (!pauseReasons[lastJustification]) {
                                                 pauseReasons[lastJustification] = { count: 0, duration: 0 };
