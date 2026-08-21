@@ -388,6 +388,9 @@ export default function AdminPage() {
                     colaboradorNombre: colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || 'Colaborador',
                     totalSeconds: 0,
                     effectiveSeconds: 0,
+                    totalPermanenceSeconds: 0,
+                    totalInactiveSeconds: 0,
+                    inactiveGaps: [],
                     breakdown: []
                 });
                 return;
