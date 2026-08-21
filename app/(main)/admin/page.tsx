@@ -697,7 +697,7 @@ export default function AdminPage() {
                     const pEvents = evtsSnapshot.docs.map(doc => doc.data());
 
                     let procPauseSeconds = 0;
-                    let procPauseStart: number | null = null;
+                    let procPauseStart: { timeMs: number; reason: string } | null = null;
                     const sortedEvents = [...pEvents].sort((a, b) => {
                         const timeA = a.horaEvento?.toMillis?.() || a.horaEvento?.seconds * 1000 || 0;
                         const timeB = b.horaEvento?.toMillis?.() || b.horaEvento?.seconds * 1000 || 0;
@@ -708,14 +708,21 @@ export default function AdminPage() {
                         const eventText = (evt.evento || "").toUpperCase();
                         const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
                         if (eventText.includes('PAUSA')) {
-                            procPauseStart = timeMs;
+                            procPauseStart = { timeMs, reason: evt.justificacion || '' };
                         } else if (eventText.includes('REANUDA') && procPauseStart) {
-                            procPauseSeconds += Math.floor((timeMs - procPauseStart) / 1000);
+                            const isExcluded = procPauseStart.reason.toLowerCase().includes('no quedar colaboradores activos');
+                            if (!isExcluded) {
+                                procPauseSeconds += Math.floor((timeMs - procPauseStart.timeMs) / 1000);
+                            }
                             procPauseStart = null;
                         }
                     });
                     if (procPauseStart && p.estado === 'Pausado') {
-                        procPauseSeconds += Math.floor((Date.now() - procPauseStart) / 1000);
+                        const start = procPauseStart as any;
+                        const isExcluded = start.reason.toLowerCase().includes('no quedar colaboradores activos');
+                        if (!isExcluded) {
+                            procPauseSeconds += Math.floor((Date.now() - start.timeMs) / 1000);
+                        }
                     }
 
                     const qCall = p.calidadLlamadaEn?.toMillis?.() || p.calidadLlamadaEn?.seconds * 1000 || 0;
@@ -955,12 +962,20 @@ export default function AdminPage() {
 
             // Calcular pausas desde los eventos para el resumen ejecutivo
             const sortedEvents = allEvents.sort((a, b) => getMs(a.horaEvento) - getMs(b.horaEvento));
-            let pauseStart: number | null = null;
+            let pauseStart: { timeMs: number; reason: string } | null = null;
             sortedEvents.forEach(evt => {
                 const eventText = (evt.evento || "").toUpperCase();
-                if (eventText.includes('PAUSA')) pauseStart = getMs(evt.horaEvento);
+                if (eventText.includes('PAUSA')) {
+                    pauseStart = {
+                        timeMs: getMs(evt.horaEvento),
+                        reason: evt.justificacion || ''
+                    };
+                }
                 if (eventText.includes('REANUDA') && pauseStart) {
-                    totalPauseDuration += Math.floor((getMs(evt.horaEvento) - pauseStart) / 1000);
+                    const isExcluded = pauseStart.reason.toLowerCase().includes('no quedar colaboradores activos');
+                    if (!isExcluded) {
+                        totalPauseDuration += Math.floor((getMs(evt.horaEvento) - pauseStart.timeMs) / 1000);
+                    }
                     pauseStart = null;
                 }
             });
@@ -1026,8 +1041,11 @@ export default function AdminPage() {
                     };
                 }
                 if (eventText.includes('REANUDA') && localPauseStart) {
-                    const dur = (getMs(evt.horaEvento) - localPauseStart.time) / 1000;
-                    pauseDetails[localPauseStart.reason] = (pauseDetails[localPauseStart.reason] || 0) + dur;
+                    const isExcluded = localPauseStart.reason.toLowerCase().includes('no quedar colaboradores activos');
+                    if (!isExcluded) {
+                        const dur = (getMs(evt.horaEvento) - localPauseStart.time) / 1000;
+                        pauseDetails[localPauseStart.reason] = (pauseDetails[localPauseStart.reason] || 0) + dur;
+                    }
                     localPauseStart = null;
                 }
             });
@@ -2804,6 +2822,11 @@ export default function AdminPage() {
                                         return;
                                     }
 
+                                    // Exclude automatic pauses when no active collaborators remain
+                                    if (reason.toLowerCase().includes("no quedar colaboradores activos")) {
+                                        return;
+                                    }
+
                                     if (eventText.includes('PROCESO PAUSADO')) {
                                         pauseStartMap[processId] = { timeMs, reason };
                                     } else if ((eventText.includes('REANUDA') || eventText.includes('FINALIZADO')) && pauseStartMap[processId]) {
@@ -3069,7 +3092,7 @@ export default function AdminPage() {
                                                 
                                                 // Process pause seconds
                                                 let procPauseSeconds = 0;
-                                                let procPauseStart: number | null = null;
+                                                let procPauseStart: { timeMs: number; reason: string } | null = null;
                                                 const procEvents = resumenEvents
                                                     .filter(evt => evt.procesoId === p.id)
                                                     .sort((a, b) => (a.horaEvento?.seconds || 0) - (b.horaEvento?.seconds || 0));
@@ -3078,14 +3101,21 @@ export default function AdminPage() {
                                                     const eventText = (evt.evento || "").toUpperCase();
                                                     const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
                                                     if (eventText.includes('PAUSA')) {
-                                                        procPauseStart = timeMs;
+                                                        procPauseStart = { timeMs, reason: evt.justificacion || '' };
                                                     } else if (eventText.includes('REANUDA') && procPauseStart) {
-                                                        procPauseSeconds += Math.floor((timeMs - procPauseStart) / 1000);
+                                                        const isExcluded = procPauseStart.reason.toLowerCase().includes('no quedar colaboradores activos');
+                                                        if (!isExcluded) {
+                                                            procPauseSeconds += Math.floor((timeMs - procPauseStart.timeMs) / 1000);
+                                                        }
                                                         procPauseStart = null;
                                                     }
                                                 });
                                                 if (procPauseStart && p.estado === 'Pausado') {
-                                                    procPauseSeconds += Math.floor((Date.now() - procPauseStart) / 1000);
+                                                    const start = procPauseStart as any;
+                                                    const isExcluded = start.reason.toLowerCase().includes('no quedar colaboradores activos');
+                                                    if (!isExcluded) {
+                                                        procPauseSeconds += Math.floor((Date.now() - start.timeMs) / 1000);
+                                                    }
                                                 }
 
                                                 // Process quality times
@@ -3376,7 +3406,8 @@ export default function AdminPage() {
                                         pauseStart = timeMs;
                                         lastJustification = evt.justificacion || 'Sin justificar';
                                         const isAcumulado = lastJustification.toUpperCase().includes('ACUMULADO');
-                                        if (!isAcumulado) {
+                                        const isExcluded = lastJustification.toLowerCase().includes('no quedar colaboradores activos');
+                                        if (!isAcumulado && !isExcluded) {
                                             if (!pauseReasons[lastJustification]) {
                                                 pauseReasons[lastJustification] = { count: 0, duration: 0 };
                                             }
@@ -3385,20 +3416,24 @@ export default function AdminPage() {
                                             lastJustification = '';
                                         }
                                     } else if (eventText.includes('REANUDA') && pauseStart) {
-                                        const duration = Math.floor((timeMs - pauseStart) / 1000);
-                                        totalPauseSeconds += duration;
-                                        if (lastJustification && pauseReasons[lastJustification]) {
-                                            pauseReasons[lastJustification].duration += duration;
+                                        if (lastJustification) {
+                                            const duration = Math.floor((timeMs - pauseStart) / 1000);
+                                            totalPauseSeconds += duration;
+                                            if (pauseReasons[lastJustification]) {
+                                                pauseReasons[lastJustification].duration += duration;
+                                            }
                                         }
                                         pauseStart = null;
                                     }
                                 });
 
                                 if (pauseStart && p.estado === 'Pausado') {
-                                    const duration = Math.floor((Date.now() - pauseStart) / 1000);
-                                    totalPauseSeconds += duration;
-                                    if (lastJustification && pauseReasons[lastJustification]) {
-                                        pauseReasons[lastJustification].duration += duration;
+                                    if (lastJustification) {
+                                        const duration = Math.floor((Date.now() - pauseStart) / 1000);
+                                        totalPauseSeconds += duration;
+                                        if (pauseReasons[lastJustification]) {
+                                            pauseReasons[lastJustification].duration += duration;
+                                        }
                                     }
                                 }
                             });
