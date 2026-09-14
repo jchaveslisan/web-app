@@ -6,19 +6,17 @@ import { X, MessageSquare, Key, ArrowRight, CheckCircle2, AlertTriangle, ShieldA
 import { cn } from '@/lib/utils';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { MotivoCorreccion } from '@/types';
+import { Comentario, MotivoCorreccion } from '@/types';
 
 interface ModalCorregirComentarioProps {
-  comentarioId: string;
-  comentarioActual: string;
+  comentario: Comentario;
   colaboradores?: any[]; // Opcional para restringir a personal del proceso
   onClose: () => void;
   onSuccess: (mensaje: string) => void;
 }
 
 export default function ModalCorregirComentario({
-  comentarioId,
-  comentarioActual,
+  comentario,
   colaboradores,
   onClose,
   onSuccess
@@ -28,7 +26,7 @@ export default function ModalCorregirComentario({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [editor, setEditor] = useState<{ id: string; nombreCompleto: string } | null>(null);
-  const [comentarioNuevoText, setComentarioNuevoText] = useState(comentarioActual);
+  const [comentarioNuevoText, setComentarioNuevoText] = useState(comentario.comentario);
   const [success, setSuccess] = useState(false);
   const [motivos, setMotivos] = useState<MotivoCorreccion[]>([]);
   const [motivoSeleccionado, setMotivoSeleccionado] = useState('');
@@ -79,21 +77,32 @@ export default function ModalCorregirComentario({
       const colabMaestro = await getColaboradorByClave(formattedPin);
       if (!colabMaestro) {
         setError('El PIN ingresado no es válido o el colaborador no está registrado.');
+        setPin('');
         setLoading(false);
         return;
       }
 
-      // 2. Opcional: Verificar si el colaborador está registrado en este proceso
+      // 2. Restringir la corrección únicamente a quien escribió la observación original (ALCOA)
+      if (colabMaestro.id !== comentario.colaboradorId) {
+        setError(`Esta observación fue registrada por "${comentario.nombreColaborador}". Bajo el principio de ALCOA, solo el creador original puede realizar correcciones.`);
+        setPin('');
+        setLoading(false);
+        return;
+      }
+
+      // 3. Opcional: Verificar si el colaborador está registrado en este proceso
       if (colaboradores && colaboradores.length > 0) {
         const estaRegistrado = colaboradores.some(c => c.colaboradorId === colabMaestro.id);
         if (!estaRegistrado) {
           setError(`El colaborador "${colabMaestro.nombreCompleto}" no está registrado en este proceso. Solo personal asociado puede realizar correcciones.`);
+          setPin('');
           setLoading(false);
           return;
         }
       }
 
       // Autorizado
+      setPin('');
       setEditor({
         id: colabMaestro.id,
         nombreCompleto: colabMaestro.nombreCompleto
@@ -102,6 +111,7 @@ export default function ModalCorregirComentario({
     } catch (err) {
       console.error('Error al verificar PIN para corrección:', err);
       setError('Ocurrió un error al verificar la identidad. Inténtelo de nuevo.');
+      setPin('');
     } finally {
       setLoading(false);
     }
@@ -116,7 +126,7 @@ export default function ModalCorregirComentario({
       return;
     }
 
-    if (comentarioNuevoText.trim() === comentarioActual.trim()) {
+    if (comentarioNuevoText.trim() === comentario.comentario.trim()) {
       setError('El comentario no ha cambiado. Modifique el texto para registrar la corrección.');
       return;
     }
@@ -135,10 +145,10 @@ export default function ModalCorregirComentario({
     setLoading(true);
     try {
       await correctComentario(
-        comentarioId,
+        comentario.id,
         editor.id,
         editor.nombreCompleto,
-        comentarioActual,
+        comentario.comentario,
         comentarioNuevoText.trim(),
         motivoFinal
       );
@@ -220,7 +230,9 @@ export default function ModalCorregirComentario({
                   <div className="relative">
                     <input
                       ref={pinInputRef}
-                      type="password"
+                      type="text"
+                      autoComplete="new-password"
+                      style={{ WebkitTextSecurity: 'disc' } as any}
                       pattern="[0-9]*"
                       inputMode="numeric"
                       value={pin}
@@ -271,7 +283,7 @@ export default function ModalCorregirComentario({
                   <div className="space-y-1">
                     <label className="block text-xs font-black text-gray-500 uppercase tracking-widest">Texto Original (Se tachará)</label>
                     <div className="w-full bg-white/5 border border-white/5 rounded-2xl p-4 text-gray-400 font-medium leading-relaxed italic line-through">
-                      "{comentarioActual}"
+                      "{comentario.comentario}"
                     </div>
                   </div>
 
@@ -339,7 +351,7 @@ export default function ModalCorregirComentario({
                     </button>
                     <button
                       type="submit"
-                      disabled={loading || !comentarioNuevoText.trim() || comentarioNuevoText.trim() === comentarioActual.trim()}
+                      disabled={loading || !comentarioNuevoText.trim() || comentarioNuevoText.trim() === comentario.comentario.trim()}
                       className="flex-1 py-4 bg-success-green text-black disabled:opacity-50 disabled:cursor-not-allowed rounded-2xl font-black transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-xs shadow-lg shadow-success-green/10"
                     >
                       {loading ? 'Guardando...' : 'Aplicar Corrección'}

@@ -233,7 +233,15 @@ export default function NuevoProcesoPage() {
                                                             onClick={() => {
                                                                 setValue('op', o.op);
                                                                 setValue('producto', o.producto);
-                                                                setValue('lote', o.lote);
+                                                                if (!o.lote || o.lote.trim() === '') {
+                                                                    setValue('lote', 'N/A');
+                                                                    setValue('fechaFabricacion', 'N/A');
+                                                                    setValue('fechaExpira', 'N/A');
+                                                                } else {
+                                                                    setValue('lote', o.lote);
+                                                                    setValue('fechaFabricacion', '');
+                                                                    setValue('fechaExpira', '');
+                                                                }
                                                                 setValue('etapa', o.etapa);
                                                                 setValue('cantidad', o.cantidad);
                                                                 setValue('articulo', o.articulo || '');

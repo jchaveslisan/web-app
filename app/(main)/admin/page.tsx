@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { format } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays } from 'date-fns';
 import {
     ArrowLeft,
     Users,
@@ -26,7 +26,8 @@ import {
     MessageSquare,
     ShieldCheck,
     AlertTriangle,
-    Package
+    Package,
+    Activity
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/auth-service';
@@ -35,9 +36,55 @@ import { db } from '@/lib/firebase';
 import { getComentariosByOP, deleteComentario, correctComentario } from '@/lib/firebase-db';
 import ModalCorregirComentario from '@/components/proceso/ModalCorregirComentario';
 import { ColaboradorMaestro, Justificacion, Etapa, User, UserRole, OrdenMaestra, MotivoCorreccion } from '@/types';
+const formatDuration = (seconds: number) => {
+    if (seconds < 0) return '0s';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return `${h}h ${m}m ${s}s`;
+};
+
+const adminSections = [
+    {
+        group: "Control de Personal",
+        color: "text-primary-blue bg-primary-blue/10 border-primary-blue/20",
+        items: [
+            { id: 'personal', title: 'Personal', desc: 'Registro, edición y control de operarios activos en planta.', icon: Users, theme: 'bg-primary-blue/10 border-primary-blue/20 text-primary-blue' },
+            { id: 'historialColaborador', title: 'Horas Colaborador', desc: 'Auditoría de timecards, horas trabajadas y efectivas por persona.', icon: Clock, theme: 'bg-pink-400/10 border-pink-400/20 text-pink-400' },
+            { id: 'usuarios', title: 'Usuarios del Sistema', desc: 'Gestión de cuentas con acceso administrativo y supervisión.', icon: Key, theme: 'bg-indigo-400/10 border-indigo-400/20 text-indigo-400' },
+        ]
+    },
+    {
+        group: "Configuración y Maestros",
+        color: "text-accent-purple bg-accent-purple/10 border-accent-purple/20",
+        items: [
+            { id: 'etapas', title: 'Etapas de Proceso', desc: 'Configuración de etapas operativas, flujos y clasificaciones.', icon: ClipboardList, theme: 'bg-purple-400/10 border-purple-400/20 text-purple-400' },
+            { id: 'ordenes', title: 'Órdenes de Producción', desc: 'Importación y parametrización de OPs activas.', icon: Package, theme: 'bg-cyan-400/10 border-cyan-400/20 text-cyan-400' },
+            { id: 'articulos', title: 'Maestro de Artículos', desc: 'Velocidades teóricas y descripción de códigos de productos.', icon: Package, theme: 'bg-emerald-400/10 border-emerald-400/20 text-emerald-400' },
+            { id: 'pausa', title: 'Motivos de Pausa', desc: 'Justificaciones predefinidas para detenciones de línea.', icon: Pause, theme: 'bg-yellow-400/10 border-yellow-400/20 text-yellow-400' },
+            { id: 'salida', title: 'Motivos de Salida', desc: 'Justificaciones para retiros anticipados del personal.', icon: LogOut, theme: 'bg-orange-400/10 border-orange-400/20 text-orange-400' },
+            { id: 'motivosCorreccion', title: 'Motivos de Corrección', desc: 'Parametrización de motivos de cambios bajo ALCOA.', icon: Settings, theme: 'bg-rose-400/10 border-rose-400/20 text-rose-400' },
+        ]
+    },
+    {
+        group: "Reportes e Indicadores",
+        color: "text-success-green bg-success-green/10 border-success-green/20",
+        items: [
+            { id: 'resumen', title: 'Resumen de Producción', desc: 'Tiempos, eficiencias y auditorías específicas por OP.', icon: BarChart3, theme: 'bg-primary-blue/10 border-primary-blue/20 text-primary-blue' },
+            { id: 'reporteFechas', title: 'Reporte de Planta', desc: 'Consolidado general de volumen y tiempos en rangos de fechas.', icon: TrendingUp, theme: 'bg-purple-400/10 border-purple-400/20 text-purple-400' },
+            { id: 'compararArticulos', title: 'Comparar Artículos', desc: 'Análisis comparativo de rendimiento entre corridas del mismo producto.', icon: Activity, theme: 'bg-amber-400/10 border-amber-400/20 text-amber-400' },
+            { id: 'reportes', title: 'Reportes PDF OP', desc: 'Generación de reportes detallados en PDF por orden de producción.', icon: FileText, theme: 'bg-red-400/10 border-red-400/20 text-red-400' },
+        ]
+    }
+];
 
 export default function AdminPage() {
-    const [tab, setTab] = useState<'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios' | 'ordenes' | 'reportes' | 'resumen' | 'articulos' | 'reporteFechas' | 'motivosCorreccion'>('personal');
+    const [tab, setTab] = useState<'hub' | 'personal' | 'pausa' | 'salida' | 'etapas' | 'usuarios' | 'ordenes' | 'reportes' | 'resumen' | 'articulos' | 'reporteFechas' | 'motivosCorreccion' | 'compararArticulos' | 'historialColaborador'>('hub');
+    
+    const isPauseExcluded = (reason: string) => {
+        const r = reason.toLowerCase();
+        return r.includes('no quedar colaboradores activos') || r.includes('fin de jornada');
+    };
     
     // Date Range Report States
     const [reportStartDate, setReportStartDate] = useState('');
@@ -82,9 +129,20 @@ export default function AdminPage() {
     const [newEtapaNombre, setNewEtapaNombre] = useState('');
     const [newEtapaTipos, setNewEtapaTipos] = useState<string[]>(['empaque', 'otros', 'anexos']);
     const [editingItem, setEditingItem] = useState<{ id: string, type: string, data: any } | null>(null);
-    const [correctionModal, setCorrectionModal] = useState<{ show: boolean; comentarioId: string; comentarioActual: string } | null>(null);
+    const [correctionModal, setCorrectionModal] = useState<{ show: boolean; comentario: any } | null>(null);
     const [motivosCorreccion, setMotivosCorreccion] = useState<MotivoCorreccion[]>([]);
     const [newMotivoCorreccionTexto, setNewMotivoCorreccionTexto] = useState('');
+    
+    // New states for Comparar Artículos & Horas Colaborador
+    const [selectedArticulo, setSelectedArticulo] = useState('');
+    const [colaboradorReportId, setColaboradorReportId] = useState('');
+    const [colaboradorReportStartDate, setColaboradorReportStartDate] = useState('');
+    const [colaboradorReportEndDate, setColaboradorReportEndDate] = useState('');
+    const [colaboradorReportLoading, setColaboradorReportLoading] = useState(false);
+    const [colaboradorReportData, setColaboradorReportData] = useState<any>(null);
+    const [comparacionData, setComparacionData] = useState<any[]>([]);
+    const [loadingComparacion, setLoadingComparacion] = useState(false);
+
     const router = useRouter();
 
     // Form states for adding
@@ -225,6 +283,535 @@ export default function AdminPage() {
             console.error(error);
         }
     };
+
+    const handleSetPeriod = (period: 'hoy' | 'semana' | 'mes') => {
+        const now = new Date();
+        if (period === 'hoy') {
+            const todayStr = format(now, 'yyyy-MM-dd');
+            setColaboradorReportStartDate(todayStr);
+            setColaboradorReportEndDate(todayStr);
+        } else if (period === 'semana') {
+            const monday = startOfWeek(now, { weekStartsOn: 1 });
+            const sunday = endOfWeek(now, { weekStartsOn: 1 });
+            setColaboradorReportStartDate(format(monday, 'yyyy-MM-dd'));
+            setColaboradorReportEndDate(format(sunday, 'yyyy-MM-dd'));
+        } else if (period === 'mes') {
+            const firstDay = startOfMonth(now);
+            const lastDay = endOfMonth(now);
+            setColaboradorReportStartDate(format(firstDay, 'yyyy-MM-dd'));
+            setColaboradorReportEndDate(format(lastDay, 'yyyy-MM-dd'));
+        }
+        setColaboradorReportData(null);
+    };
+
+    const handleGenerateColaboradorReport = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!colaboradorReportId || !colaboradorReportStartDate || !colaboradorReportEndDate) {
+            alert('Por favor seleccione colaborador y rango de fechas');
+            return;
+        }
+        setColaboradorReportLoading(true);
+        setColaboradorReportData(null);
+        try {
+            const dayStart = new Date(colaboradorReportStartDate + 'T00:00:00');
+            const dayEnd = new Date(colaboradorReportEndDate + 'T23:59:59');
+            const dayStartMs = dayStart.getTime();
+            const dayEndMs = dayEnd.getTime();
+
+            const q = query(
+                collection(db, 'colaboradores_log'),
+                where('colaboradorId', '==', colaboradorReportId)
+            );
+            const snapshot = await getDocs(q);
+            const rawLogs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+
+            // Query events log in this date range to fetch historical check-out motives
+            const eventsQ = query(
+                collection(db, 'eventos_log'),
+                where('horaEvento', '>=', dayStart),
+                where('horaEvento', '<=', dayEnd)
+            );
+            const eventsSnapshot = await getDocs(eventsQ);
+            const periodEvents = eventsSnapshot.docs.map(doc => doc.data() as any);
+
+            // Helper function to resolve exit/pause justification
+            const resolveMotiveAtTime = (time: number, processId: string, logHoraSalida: any, fallbackReason: string) => {
+                const logExitMs = logHoraSalida?.toMillis?.() || logHoraSalida?.seconds * 1000 || 0;
+                if (logExitMs > 0 && Math.abs(logExitMs - time) < 5000 && fallbackReason) {
+                    return fallbackReason;
+                }
+
+                const colabNombre = colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || '';
+                const matchingEvent = periodEvents.find(evt => {
+                    const evtTime = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                    const timeDiff = Math.abs(evtTime - time);
+                    if (timeDiff > 10000) return false;
+
+                    const eventText = (evt.evento || "").toUpperCase();
+                    const just = (evt.justificacion || "");
+
+                    if (eventText.includes("SALIDA DE PERSONAL")) {
+                        return just.toLowerCase().includes(colabNombre.toLowerCase()) || just.toLowerCase().includes(colaboradorReportId.toLowerCase());
+                    }
+                    if (eventText.includes("PAUSADO") || eventText.includes("SETUP FINALIZADO") || eventText.includes("PROCESO FINALIZADO")) {
+                        return evt.procesoId === processId;
+                    }
+                    return false;
+                });
+
+                if (matchingEvent) {
+                    const eventText = (matchingEvent.evento || "").toUpperCase();
+                    if (eventText.includes("SALIDA DE PERSONAL")) {
+                        let motiveText = matchingEvent.justificacion || "";
+                        if (motiveText.includes(":")) {
+                            motiveText = motiveText.split(":").slice(1).join(":").trim();
+                        }
+                        return motiveText;
+                    }
+                    if (eventText.includes("PAUSADO")) {
+                        return matchingEvent.justificacion || "Pausa de Proceso";
+                    }
+                    if (eventText.includes("SETUP FINALIZADO")) {
+                        return "Finalización de Setup";
+                    }
+                    if (eventText.includes("PROCESO FINALIZADO")) {
+                        return "Finalización de Proceso";
+                    }
+                }
+
+                return "";
+            };
+
+            const dayLogs = rawLogs.filter(log => {
+                const entry = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || Date.now();
+                return entry < dayEndMs && exit > dayStartMs;
+            });
+
+            if (dayLogs.length === 0) {
+                setColaboradorReportData({
+                    colaboradorNombre: colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || 'Colaborador',
+                    totalSeconds: 0,
+                    effectiveSeconds: 0,
+                    totalPermanenceSeconds: 0,
+                    totalInactiveSeconds: 0,
+                    inactiveGaps: [],
+                    breakdown: []
+                });
+                return;
+            }
+
+            const processIds = Array.from(new Set(dayLogs.map(l => l.procesoId)));
+            const processesMap: Record<string, any> = {};
+            const eventsMap: Record<string, any[]> = {};
+
+            await Promise.all(processIds.map(async (pId) => {
+                const pDoc = await getDoc(doc(db, 'procesos', pId));
+                if (pDoc.exists()) {
+                    processesMap[pId] = { id: pDoc.id, ...pDoc.data() };
+                }
+
+                const evtsQ = query(
+                    collection(db, 'eventos'),
+                    where('procesoId', '==', pId)
+                );
+                const evtsSnapshot = await getDocs(evtsQ);
+                eventsMap[pId] = evtsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            }));
+
+            let totalSeconds = 0;
+            let effectiveSeconds = 0;
+            const breakdown: any[] = [];
+
+            dayLogs.forEach(log => {
+                const process = processesMap[log.procesoId];
+                if (!process) return;
+
+                const logStart = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                const logEnd = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || (process.estado === 'Iniciado' ? Date.now() : (process.horaFinReal?.toMillis?.() || process.horaFinReal?.seconds * 1000 || Date.now()));
+
+                const overlapStart = Math.max(logStart, dayStartMs);
+                const overlapEnd = Math.min(logEnd, dayEndMs);
+
+                if (overlapEnd <= overlapStart) return;
+
+                const logTotalDuration = Math.floor((overlapEnd - overlapStart) / 1000);
+                totalSeconds += logTotalDuration;
+
+                const runningIntervals: { start: number; end: number }[] = [];
+                const pStart = process.horaInicioReal?.toMillis?.() || process.horaInicioReal?.seconds * 1000 || 0;
+                if (pStart > 0) {
+                    let currentStart = pStart;
+                    const pEvents = eventsMap[log.procesoId] || [];
+                    const sortedEvents = [...pEvents].sort((a, b) => {
+                        const timeA = a.horaEvento?.toMillis?.() || a.horaEvento?.seconds * 1000 || 0;
+                        const timeB = b.horaEvento?.toMillis?.() || b.horaEvento?.seconds * 1000 || 0;
+                        return timeA - timeB;
+                    });
+
+                    sortedEvents.forEach(evt => {
+                        const eventText = (evt.evento || "").toUpperCase();
+                        const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                        
+                        if (eventText.includes('PAUSA')) {
+                            if (currentStart > 0 && timeMs > currentStart) {
+                                runningIntervals.push({ start: currentStart, end: timeMs });
+                                currentStart = 0;
+                            }
+                        } else if (eventText.includes('REANUDA')) {
+                            if (currentStart === 0) {
+                                currentStart = timeMs;
+                            }
+                        }
+                    });
+
+                    if (currentStart > 0) {
+                        const pEnd = process.horaFinReal?.toMillis?.() || process.horaFinReal?.seconds * 1000 || Date.now();
+                        if (pEnd > currentStart) {
+                            runningIntervals.push({ start: currentStart, end: pEnd });
+                        }
+                    }
+                }
+
+                let logEffectiveDuration = 0;
+                runningIntervals.forEach(interval => {
+                    const tripleOverlapStart = Math.max(overlapStart, interval.start);
+                    const tripleOverlapEnd = Math.min(overlapEnd, interval.end);
+                    if (tripleOverlapEnd > tripleOverlapStart) {
+                        logEffectiveDuration += Math.floor((tripleOverlapEnd - tripleOverlapStart) / 1000);
+                    }
+                });
+
+                effectiveSeconds += logEffectiveDuration;
+
+                // Resolve checkout/pause reason at overlapEnd
+                let checkoutReason = "";
+                if (log.horaSalida) {
+                    checkoutReason = resolveMotiveAtTime(overlapEnd, log.procesoId, log.horaSalida, log.justificacionSalida || "");
+                    if (!checkoutReason) {
+                        checkoutReason = "Salida Registrada";
+                    }
+                }
+
+                breakdown.push({
+                    id: log.id,
+                    op: process.ordenProduccion,
+                    etapa: process.etapa,
+                    producto: process.producto,
+                    tipo: log.tipo || 'colaborador',
+                    entry: new Date(overlapStart),
+                    exit: log.horaSalida ? new Date(overlapEnd) : null,
+                    totalDuration: logTotalDuration,
+                    effectiveDuration: logEffectiveDuration,
+                    estadoProceso: process.estado,
+                    motivoSalida: checkoutReason
+                });
+            });
+
+            // Sort breakdown chronologically (entry ascending)
+            breakdown.sort((a, b) => a.entry.getTime() - b.entry.getTime());
+
+            // Group and calculate linear presence and gaps per day
+            let totalPermanenceSeconds = 0;
+            let totalInactiveSeconds = 0;
+            const inactiveGaps: any[] = [];
+
+            // 1. Get list of distinct dates in the query range
+            const datesList: string[] = [];
+            let currentCursor = new Date(colaboradorReportStartDate + 'T00:00:00');
+            const endCursor = new Date(colaboradorReportEndDate + 'T23:59:59');
+            while (currentCursor <= endCursor) {
+                datesList.push(format(currentCursor, 'yyyy-MM-dd'));
+                currentCursor = addDays(currentCursor, 1);
+            }
+
+            // 2. For each day, find active intervals and compute gaps
+            datesList.forEach(dStr => {
+                const tS = new Date(dStr + 'T00:00:00').getTime();
+                const tE = new Date(dStr + 'T23:59:59').getTime();
+
+                // Get logs overlapping this day
+                const dayLogsForGaps = dayLogs.filter(log => {
+                    const entry = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                    const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || Date.now();
+                    return entry < tE && exit > tS;
+                });
+
+                if (dayLogsForGaps.length === 0) return;
+
+                // Map to intervals clamped to [tS, tE]
+                const intervals = dayLogsForGaps.map(log => {
+                    const entry = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                    const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || Date.now();
+                    return {
+                        start: Math.max(entry, tS),
+                        end: Math.min(exit, tE)
+                    };
+                });
+
+                // Sort intervals by start ascending
+                intervals.sort((a, b) => a.start - b.start);
+
+                // Merge overlapping intervals
+                const merged: { start: number; end: number }[] = [];
+                intervals.forEach(curr => {
+                    if (merged.length === 0) {
+                        merged.push(curr);
+                    } else {
+                        const last = merged[merged.length - 1];
+                        if (curr.start <= last.end) {
+                            last.end = Math.max(last.end, curr.end);
+                        } else {
+                            merged.push(curr);
+                        }
+                    }
+                });
+
+                if (merged.length > 0) {
+                    const earliestStart = merged[0].start;
+                    const latestEnd = merged[merged.length - 1].end;
+                    const presenceDuration = latestEnd - earliestStart;
+                    totalPermanenceSeconds += Math.floor(presenceDuration / 1000);
+
+                    // Check gaps between merged intervals
+                    for (let i = 0; i < merged.length - 1; i++) {
+                        const gapStart = merged[i].end;
+                        const gapEnd = merged[i + 1].start;
+                        const gapDuration = gapEnd - gapStart;
+                        if (gapDuration >= 5000) { // Gaps longer than 5 seconds
+                            const gapSecs = Math.floor(gapDuration / 1000);
+                            totalInactiveSeconds += gapSecs;
+
+                            // Find the log that ended at gapStart (or close to it)
+                            const endingLog = dayLogsForGaps.find(log => {
+                                const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || Date.now();
+                                return Math.abs(exit - gapStart) < 2000;
+                            });
+
+                            const targetLog = endingLog || dayLogsForGaps.find(log => {
+                                const entry = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                                const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || Date.now();
+                                return entry <= gapStart && exit > gapStart;
+                            });
+
+                            let reason = "";
+                            if (targetLog) {
+                                reason = resolveMotiveAtTime(gapStart, targetLog.procesoId, targetLog.horaSalida, targetLog.justificacionSalida || "");
+                            }
+                            if (!reason) {
+                                reason = "Salida Registrada / Fin de turno";
+                            }
+
+                            inactiveGaps.push({
+                                id: `${dStr}-${gapStart}`,
+                                fecha: format(new Date(tS), 'dd/MM/yyyy'),
+                                inicio: gapStart,
+                                fin: gapEnd,
+                                duracion: gapSecs,
+                                motivo: reason
+                            });
+                        }
+                    }
+
+                    // Check if the very last checkout of the day was temporary (and they did not register again)
+                    if (merged.length > 0) {
+                        const lastInterval = merged[merged.length - 1];
+                        const lastExitTime = lastInterval.end;
+                        
+                        // But only check if the last checkout is not the end of the day (23:59:59)
+                        if (lastExitTime < tE - 5000) {
+                            // Find the log that ended at lastExitTime
+                            const lastEndingLog = dayLogsForGaps.find(log => {
+                                const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || Date.now();
+                                return Math.abs(exit - lastExitTime) < 2000;
+                            });
+
+                            const lastTargetLog = lastEndingLog || dayLogsForGaps.find(log => {
+                                const entry = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                                const exit = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || Date.now();
+                                return entry <= lastExitTime && exit > lastExitTime;
+                            });
+
+                            let lastCheckoutReason = "";
+                            if (lastTargetLog) {
+                                lastCheckoutReason = resolveMotiveAtTime(lastExitTime, lastTargetLog.procesoId, lastTargetLog.horaSalida, lastTargetLog.justificacionSalida || "");
+                            }
+                            if (!lastCheckoutReason) {
+                                lastCheckoutReason = "Salida Registrada";
+                            }
+
+                            const upperReason = lastCheckoutReason.toUpperCase();
+                            const isFinalExit = upperReason.includes("JORNADA") || upperReason.includes("TURNO") || upperReason.includes("FINALIZADO");
+
+                            if (!isFinalExit) {
+                                // Yes, they checked out for a temporary reason but never checked back in!
+                                inactiveGaps.push({
+                                    id: `${dStr}-last-no-return`,
+                                    fecha: format(new Date(tS), 'dd/MM/yyyy'),
+                                    inicio: lastExitTime,
+                                    fin: null, // Indicates they did not return
+                                    duracion: null, // Indicates N/A
+                                    motivo: lastCheckoutReason
+                                });
+                            }
+                        }
+                    }
+                }
+            });
+
+            setColaboradorReportData({
+                colaboradorNombre: colaboradores.find(c => c.id === colaboradorReportId)?.nombreCompleto || 'Colaborador',
+                totalSeconds,
+                effectiveSeconds,
+                totalPermanenceSeconds,
+                totalInactiveSeconds,
+                inactiveGaps,
+                breakdown
+            });
+        } catch (error) {
+            console.error('Error generating report:', error);
+            alert('Error al generar el reporte del colaborador');
+        } finally {
+            setColaboradorReportLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (tab !== 'compararArticulos' || !selectedArticulo) {
+            setComparacionData([]);
+            return;
+        }
+
+        const loadComparacionData = async () => {
+            setLoadingComparacion(true);
+            try {
+                const filteredProcs = allProcesos.filter(p => p.articulo === selectedArticulo);
+                if (filteredProcs.length === 0) {
+                    setComparacionData([]);
+                    return;
+                }
+
+                const procIds = filteredProcs.map(p => p.id);
+                const processesWithTimes = await Promise.all(filteredProcs.map(async (p) => {
+                    const logsQ = query(collection(db, 'colaboradores_log'), where('procesoId', '==', p.id));
+                    const logsSnapshot = await getDocs(logsQ);
+                    const pLogs = logsSnapshot.docs.map(doc => doc.data());
+
+                    const evtsQ = query(collection(db, 'eventos'), where('procesoId', '==', p.id));
+                    const evtsSnapshot = await getDocs(evtsQ);
+                    const pEvents = evtsSnapshot.docs.map(doc => doc.data());
+
+                    let procPauseSeconds = 0;
+                    let procPauseStart: { timeMs: number; reason: string } | null = null;
+                    const sortedEvents = [...pEvents].sort((a, b) => {
+                        const timeA = a.horaEvento?.toMillis?.() || a.horaEvento?.seconds * 1000 || 0;
+                        const timeB = b.horaEvento?.toMillis?.() || b.horaEvento?.seconds * 1000 || 0;
+                        return timeA - timeB;
+                    });
+                    
+                    sortedEvents.forEach(evt => {
+                        const eventText = (evt.evento || "").toUpperCase();
+                        const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                        if (eventText.includes('PAUSA')) {
+                            procPauseStart = { timeMs, reason: evt.justificacion || '' };
+                        } else if (eventText.includes('REANUDA') && procPauseStart) {
+                            const isExcluded = isPauseExcluded(procPauseStart.reason);
+                            if (!isExcluded) {
+                                procPauseSeconds += Math.floor((timeMs - procPauseStart.timeMs) / 1000);
+                            }
+                            procPauseStart = null;
+                        }
+                    });
+                    if (procPauseStart && p.estado === 'Pausado') {
+                        const start = procPauseStart as any;
+                        const isExcluded = isPauseExcluded(start.reason);
+                        if (!isExcluded) {
+                            procPauseSeconds += Math.floor((Date.now() - start.timeMs) / 1000);
+                        }
+                    }
+
+                    const qCall = p.calidadLlamadaEn?.toMillis?.() || p.calidadLlamadaEn?.seconds * 1000 || 0;
+                    const qArrival = p.calidadLlegadaEn?.toMillis?.() || p.calidadLlegadaEn?.seconds * 1000 || 0;
+                    const qApproval = p.calidadAprobadaEn?.toMillis?.() || p.calidadAprobadaEn?.seconds * 1000 || 0;
+                    
+                    let procQualityWaiting = 0;
+                    let procQualityInspection = 0;
+                    if (qCall > 0 && qArrival > 0) procQualityWaiting = Math.floor((qArrival - qCall) / 1000);
+                    else if (qCall > 0 && p.calidadEstado === 'esperando') procQualityWaiting = Math.floor((Date.now() - qCall) / 1000);
+                    
+                    if (qArrival > 0 && qApproval > 0) procQualityInspection = Math.floor((qApproval - qArrival) / 1000);
+                    else if (qArrival > 0 && p.calidadEstado === 'inspeccion') procQualityInspection = Math.floor((Date.now() - qArrival) / 1000);
+
+                    const runningIntervals: { start: number; end: number }[] = [];
+                    const pStart = p.horaInicioReal?.toMillis?.() || p.horaInicioReal?.seconds * 1000 || 0;
+                    if (pStart > 0) {
+                        let currentStart = pStart;
+                        sortedEvents.forEach(evt => {
+                            const eventText = (evt.evento || "").toUpperCase();
+                            const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                            if (eventText.includes('PAUSA')) {
+                                if (currentStart > 0 && timeMs > currentStart) {
+                                    runningIntervals.push({ start: currentStart, end: timeMs });
+                                    currentStart = 0;
+                                }
+                            } else if (eventText.includes('REANUDA')) {
+                                if (currentStart === 0) {
+                                    currentStart = timeMs;
+                                }
+                            }
+                        });
+                        if (currentStart > 0) {
+                            const pEnd = p.horaFinReal?.toMillis?.() || p.horaFinReal?.seconds * 1000 || Date.now();
+                            if (pEnd > currentStart) {
+                                runningIntervals.push({ start: currentStart, end: pEnd });
+                            }
+                        }
+                    }
+
+                    const effectiveProcessSeconds = runningIntervals.reduce((sum, interval) => sum + Math.floor((interval.end - interval.start) / 1000), 0);
+
+                    let effectiveHHSeconds = 0;
+                    pLogs.forEach(log => {
+                        const logStart = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                        const logEnd = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || (p.estado === 'Iniciado' ? Date.now() : (p.horaFinReal?.toMillis?.() || p.horaFinReal?.seconds * 1000 || Date.now()));
+
+                        if (logStart > 0 && logEnd > logStart) {
+                            runningIntervals.forEach(interval => {
+                                const overlapStart = Math.max(logStart, interval.start);
+                                const overlapEnd = Math.min(logEnd, interval.end);
+                                if (overlapEnd > overlapStart) {
+                                    effectiveHHSeconds += Math.floor((overlapEnd - overlapStart) / 1000);
+                                }
+                            });
+                        }
+                    });
+
+                    return {
+                        ...p,
+                        procPauseSeconds,
+                        procQualityWaiting,
+                        procQualityInspection,
+                        effectiveProcessSeconds,
+                        effectiveHHSeconds
+                    };
+                }));
+
+                processesWithTimes.sort((a, b) => {
+                    const timeA = a.creadoEn?.toMillis?.() || a.creadoEn?.seconds * 1000 || 0;
+                    const timeB = b.creadoEn?.toMillis?.() || b.creadoEn?.seconds * 1000 || 0;
+                    return timeB - timeA;
+                });
+
+                setComparacionData(processesWithTimes);
+            } catch (error) {
+                console.error('Error loading comparison data:', error);
+            } finally {
+                setLoadingComparacion(false);
+            }
+        };
+
+        loadComparacionData();
+    }, [selectedArticulo, tab, allProcesos]);
 
     const handleSyncAppSheet = async () => {
         setIsSyncing(true);
@@ -380,12 +967,20 @@ export default function AdminPage() {
 
             // Calcular pausas desde los eventos para el resumen ejecutivo
             const sortedEvents = allEvents.sort((a, b) => getMs(a.horaEvento) - getMs(b.horaEvento));
-            let pauseStart: number | null = null;
+            let pauseStart: { timeMs: number; reason: string } | null = null;
             sortedEvents.forEach(evt => {
                 const eventText = (evt.evento || "").toUpperCase();
-                if (eventText.includes('PAUSA')) pauseStart = getMs(evt.horaEvento);
+                if (eventText.includes('PAUSA')) {
+                    pauseStart = {
+                        timeMs: getMs(evt.horaEvento),
+                        reason: evt.justificacion || ''
+                    };
+                }
                 if (eventText.includes('REANUDA') && pauseStart) {
-                    totalPauseDuration += Math.floor((getMs(evt.horaEvento) - pauseStart) / 1000);
+                    const isExcluded = isPauseExcluded(pauseStart.reason);
+                    if (!isExcluded) {
+                        totalPauseDuration += Math.floor((getMs(evt.horaEvento) - pauseStart.timeMs) / 1000);
+                    }
                     pauseStart = null;
                 }
             });
@@ -451,8 +1046,11 @@ export default function AdminPage() {
                     };
                 }
                 if (eventText.includes('REANUDA') && localPauseStart) {
-                    const dur = (getMs(evt.horaEvento) - localPauseStart.time) / 1000;
-                    pauseDetails[localPauseStart.reason] = (pauseDetails[localPauseStart.reason] || 0) + dur;
+                    const isExcluded = isPauseExcluded(localPauseStart.reason);
+                    if (!isExcluded) {
+                        const dur = (getMs(evt.horaEvento) - localPauseStart.time) / 1000;
+                        pauseDetails[localPauseStart.reason] = (pauseDetails[localPauseStart.reason] || 0) + dur;
+                    }
                     localPauseStart = null;
                 }
             });
@@ -1155,145 +1753,123 @@ export default function AdminPage() {
 
     return (
         <div className="min-h-screen bg-background text-white p-6 lg:p-10">
-            <header className="flex items-center gap-4 mb-10">
-                <button
-                    onClick={() => router.push('/procesos')}
-                    className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors border border-white/10"
-                >
-                    <ArrowLeft className="h-6 w-6" />
-                </button>
-                <div>
-                    <h1 className="text-3xl font-black tracking-tight uppercase">Administración</h1>
-                    <p className="text-gray-400 font-medium">Gestión de maestros y configuraciones</p>
+            <header className="flex items-center justify-between flex-wrap gap-4 mb-10 border-b border-white/5 pb-6">
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => {
+                            if (tab === 'hub') {
+                                router.push('/procesos');
+                            } else {
+                                setTab('hub');
+                                setShowForm(false);
+                            }
+                        }}
+                        className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-colors border border-white/10 flex items-center justify-center text-white"
+                        title={tab === 'hub' ? "Volver a Procesos" : "Volver al Panel Principal"}
+                    >
+                        <ArrowLeft className="h-6 w-6" />
+                    </button>
+                    <div>
+                        <h1 className="text-2xl lg:text-3xl font-black tracking-tight uppercase flex items-center gap-3">
+                            {tab === 'hub' ? "Administración" : (
+                                tab === 'personal' ? "Personal Registrado" :
+                                tab === 'historialColaborador' ? "Horas Colaborador" :
+                                tab === 'usuarios' ? "Usuarios del Sistema" :
+                                tab === 'etapas' ? "Etapas de Proceso" :
+                                tab === 'ordenes' ? "Órdenes de Producción" :
+                                tab === 'articulos' ? "Maestro de Artículos" :
+                                tab === 'pausa' ? "Motivos de Pausa" :
+                                tab === 'salida' ? "Motivos de Salida" :
+                                tab === 'motivosCorreccion' ? "Motivos de Corrección" :
+                                tab === 'resumen' ? "Resumen de Producción" :
+                                tab === 'reporteFechas' ? "Reporte de Planta" :
+                                tab === 'compararArticulos' ? "Comparar Artículos" :
+                                tab === 'reportes' ? "Reportes PDF OP" :
+                                "Administración"
+                            )}
+                        </h1>
+                        <p className="text-gray-400 font-medium text-xs lg:text-sm">
+                            {tab === 'hub' ? "Gestión de maestros, reportes y configuraciones generales" : "Consola de Administración / Control Operativo"}
+                        </p>
+                    </div>
                 </div>
+
+                {tab !== 'hub' && (
+                    <div className="relative">
+                        <select
+                            value={tab}
+                            onChange={(e) => {
+                                setTab(e.target.value as any);
+                                setShowForm(false);
+                            }}
+                            className="bg-white border border-gray-300 text-black hover:border-gray-400 rounded-xl py-2.5 px-4 outline-none focus:ring-4 focus:ring-primary-blue/20 text-xs font-black uppercase tracking-wider cursor-pointer font-bold"
+                        >
+                            <option value="hub">-- IR AL PANEL PRINCIPAL --</option>
+                            <optgroup label="Personal">
+                                <option value="personal">Personal Registrado</option>
+                                <option value="historialColaborador">Horas Colaborador</option>
+                                <option value="usuarios">Usuarios del Sistema</option>
+                            </optgroup>
+                            <optgroup label="Configuración y Maestros">
+                                <option value="etapas">Etapas de Proceso</option>
+                                <option value="ordenes">Órdenes de Producción</option>
+                                <option value="articulos">Maestro de Artículos</option>
+                                <option value="pausa">Motivos de Pausa</option>
+                                <option value="salida">Motivos de Salida</option>
+                                <option value="motivosCorreccion">Motivos de Corrección</option>
+                            </optgroup>
+                            <optgroup label="Reportes e Indicadores">
+                                <option value="resumen">Resumen de Producción</option>
+                                <option value="reporteFechas">Reporte de Planta</option>
+                                <option value="compararArticulos">Comparar Artículos</option>
+                                <option value="reportes">Reportes PDF OP</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                )}
             </header>
 
-            {/* Tabs */}
-            <div className="mb-8 flex gap-3 border-b border-white/10 overflow-x-auto">
-                <button
-                    onClick={() => { setTab('personal'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'personal'
-                            ? "border-primary-blue text-primary-blue"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <Users className="h-5 w-5" /> Personal
-                </button>
-                <button
-                    onClick={() => { setTab('pausa'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'pausa'
-                            ? "border-warning-yellow text-warning-yellow"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <Pause className="h-5 w-5" /> Justificaciones de Pausa
-                </button>
-                <button
-                    onClick={() => { setTab('salida'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'salida'
-                            ? "border-danger-red text-danger-red"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <LogOut className="h-5 w-5" /> Justificaciones de Salida
-                </button>
-                <button
-                    onClick={() => { setTab('etapas'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'etapas'
-                            ? "border-accent-purple text-accent-purple"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    Etapas
-                </button>
-                <button
-                    onClick={() => { setTab('usuarios'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'usuarios'
-                            ? "border-emerald-400 text-emerald-400"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <Users className="h-5 w-5" /> Usuarios
-                </button>
-                <button
-                    onClick={() => { setTab('ordenes'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'ordenes'
-                            ? "border-primary-blue text-primary-blue"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <ClipboardList className="h-5 w-5" /> Ordenes OP
-                </button>
-                <button
-                    onClick={() => { setTab('reportes'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'reportes'
-                            ? "border-accent-purple text-accent-purple"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <FileText className="h-5 w-5" /> Reportes
-                </button>
-                <button
-                    onClick={() => { setTab('resumen'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'resumen'
-                            ? "border-primary-blue text-primary-blue"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <BarChart3 className="h-5 w-5" /> Resumen de Producción
-                </button>
-                <button
-                    onClick={() => { setTab('reporteFechas'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'reporteFechas'
-                            ? "border-accent-purple text-accent-purple"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <TrendingUp className="h-5 w-5" /> Reporte de Planta
-                </button>
-                <button
-                    onClick={() => { setTab('motivosCorreccion'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'motivosCorreccion'
-                            ? "border-warning-yellow text-warning-yellow"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <Settings className="h-5 w-5" /> Motivos Corrección
-                </button>
-                <button
-                    onClick={() => { setTab('articulos'); setShowForm(false); }}
-                    className={cn(
-                        "flex items-center gap-2 px-6 py-3 font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap",
-                        tab === 'articulos'
-                            ? "border-emerald-400 text-emerald-400"
-                            : "border-transparent text-gray-400 hover:text-white"
-                    )}
-                >
-                    <Package className="h-5 w-5" /> Artículos
-                </button>
-            </div>
-
-            <div className="max-w-4xl mx-auto">
+            <div className={cn("mx-auto transition-all duration-500", tab === 'hub' ? "max-w-6xl" : "max-w-4xl")}>
+                {/* Admin Hub Landing View */}
+                {tab === 'hub' && (
+                    <div className="space-y-12 animate-in fade-in duration-500">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {adminSections.map((group, groupIdx) => (
+                                <div key={groupIdx} className="space-y-4">
+                                    <div className={cn(
+                                        "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border w-fit font-mono",
+                                        group.color
+                                    )}>
+                                        {group.group}
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-4">
+                                        {group.items.map(item => {
+                                            const Icon = item.icon;
+                                            return (
+                                                <button
+                                                    key={item.id}
+                                                    onClick={() => { setTab(item.id as any); setShowForm(false); }}
+                                                    className="w-full text-left glass p-5 rounded-[2rem] border border-white/5 bg-white/5 hover:bg-white/10 hover:border-white/15 transition-all duration-300 flex items-start gap-4 hover:scale-[1.02] shadow-lg group hover:shadow-xl hover:shadow-black/20"
+                                                >
+                                                    <div className={cn(
+                                                        "p-3.5 rounded-xl border transition-all duration-300 group-hover:scale-105 shrink-0",
+                                                        item.theme
+                                                    )}>
+                                                        <Icon className="h-5 w-5" />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <h3 className="font-black text-white uppercase text-sm group-hover:text-amber-400 transition-colors tracking-wide">{item.title}</h3>
+                                                        <p className="text-[11px] text-gray-400 font-medium leading-relaxed">{item.desc}</p>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 {/* TAB: PERSONAL */}
                 {tab === 'personal' && (
                     <>
@@ -2149,6 +2725,75 @@ export default function AdminPage() {
 
                                 const mainProceso = procesosOP[0];
 
+                                const calculateProcessEffectiveTimes = (p: any, pEvents: any[], pLogs: any[]) => {
+                                    const runningIntervals: { start: number; end: number }[] = [];
+                                    const pStart = p.horaInicioReal?.toMillis?.() || p.horaInicioReal?.seconds * 1000 || 0;
+                                    if (pStart > 0) {
+                                        let currentStart = pStart;
+                                        const sortedEvents = [...pEvents].sort((a, b) => {
+                                            const timeA = a.horaEvento?.toMillis?.() || a.horaEvento?.seconds * 1000 || 0;
+                                            const timeB = b.horaEvento?.toMillis?.() || b.horaEvento?.seconds * 1000 || 0;
+                                            return timeA - timeB;
+                                        });
+
+                                        sortedEvents.forEach(evt => {
+                                            const eventText = (evt.evento || "").toUpperCase();
+                                            const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                                            
+                                            if (eventText.includes('PAUSA')) {
+                                                if (currentStart > 0 && timeMs > currentStart) {
+                                                    runningIntervals.push({ start: currentStart, end: timeMs });
+                                                    currentStart = 0;
+                                                }
+                                            } else if (eventText.includes('REANUDA')) {
+                                                if (currentStart === 0) {
+                                                    currentStart = timeMs;
+                                                }
+                                            }
+                                        });
+                                        
+                                        if (currentStart > 0) {
+                                            const pEnd = p.horaFinReal?.toMillis?.() || p.horaFinReal?.seconds * 1000 || Date.now();
+                                            if (pEnd > currentStart) {
+                                                runningIntervals.push({ start: currentStart, end: pEnd });
+                                            }
+                                        }
+                                    }
+
+                                    const effectiveProcessSeconds = runningIntervals.reduce((sum, interval) => sum + Math.floor((interval.end - interval.start) / 1000), 0);
+
+                                    let effectiveHHSeconds = 0;
+                                    pLogs.forEach(log => {
+                                        const logStart = log.horaIngreso?.toMillis?.() || log.horaIngreso?.seconds * 1000 || 0;
+                                        const logEnd = log.horaSalida?.toMillis?.() || log.horaSalida?.seconds * 1000 || (p.estado === 'Iniciado' ? Date.now() : (p.horaFinReal?.toMillis?.() || p.horaFinReal?.seconds * 1000 || Date.now()));
+
+                                        if (logStart > 0 && logEnd > logStart) {
+                                            runningIntervals.forEach(interval => {
+                                                const overlapStart = Math.max(logStart, interval.start);
+                                                const overlapEnd = Math.min(logEnd, interval.end);
+                                                if (overlapEnd > overlapStart) {
+                                                    effectiveHHSeconds += Math.floor((overlapEnd - overlapStart) / 1000);
+                                                }
+                                            });
+                                        }
+                                    });
+
+                                    return { effectiveProcessSeconds, effectiveHHSeconds };
+                                };
+
+                                let totalOPEffectiveProcessSeconds = 0;
+                                let totalOPEffectiveHHSeconds = 0;
+
+                                procesosOP.forEach(p => {
+                                    const pEvents = resumenEvents.filter(evt => evt.procesoId === p.id);
+                                    const pLogs = resumenLogs.filter(log => log.procesoId === p.id);
+                                    const { effectiveProcessSeconds, effectiveHHSeconds } = calculateProcessEffectiveTimes(p, pEvents, pLogs);
+                                    p._effectiveProcessSeconds = effectiveProcessSeconds;
+                                    p._effectiveHHSeconds = effectiveHHSeconds;
+                                    totalOPEffectiveProcessSeconds += effectiveProcessSeconds;
+                                    totalOPEffectiveHHSeconds += effectiveHHSeconds;
+                                });
+
                                 // Time Calculations
                                 const startTimes = procesosOP.map(p => p.horaInicioReal?.toMillis?.() || p.horaInicioReal?.seconds * 1000).filter(Boolean);
                                 const endTimes = procesosOP.map(p => p.horaFinReal?.toMillis?.() || p.horaFinReal?.seconds * 1000).filter(Boolean);
@@ -2162,6 +2807,7 @@ export default function AdminPage() {
                                 const totalReprocesoSeconds = procesosOP.reduce((sum, p) => sum + (p.tiempoReprocesoSegundos || 0), 0);
                                 
                                 // Pause calculations
+                                const pauseDurationsByReason: Record<string, number> = {};
                                 let totalPauseSeconds = 0;
                                 const sortedEvents = [...resumenEvents].sort((a, b) => {
                                     const timeA = a.horaEvento?.toMillis?.() || a.horaEvento?.seconds * 1000 || 0;
@@ -2169,16 +2815,29 @@ export default function AdminPage() {
                                     return timeA - timeB;
                                 });
                                 
-                                let pauseStartMap: Record<string, number> = {};
+                                let pauseStartMap: Record<string, { timeMs: number; reason: string }> = {};
                                 sortedEvents.forEach(evt => {
                                     const eventText = (evt.evento || "").toUpperCase();
                                     const processId = evt.procesoId;
                                     const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
+                                    const reason = evt.justificacion || "Pausa Automática";
                                     
-                                    if (eventText.includes('PAUSA')) {
-                                        pauseStartMap[processId] = timeMs;
-                                    } else if (eventText.includes('REANUDA') && pauseStartMap[processId]) {
-                                        totalPauseSeconds += Math.floor((timeMs - pauseStartMap[processId]) / 1000);
+                                    // Exclude "Acumulado" as a cause of pause (Requirement #2)
+                                    if (reason.toUpperCase().includes("ACUMULADO")) {
+                                        return;
+                                    }
+
+                                    if (isPauseExcluded(reason)) {
+                                        return;
+                                    }
+
+                                    if (eventText.includes('PROCESO PAUSADO')) {
+                                        pauseStartMap[processId] = { timeMs, reason };
+                                    } else if ((eventText.includes('REANUDA') || eventText.includes('FINALIZADO')) && pauseStartMap[processId]) {
+                                        const duration = Math.floor((timeMs - pauseStartMap[processId].timeMs) / 1000);
+                                        const r = pauseStartMap[processId].reason;
+                                        pauseDurationsByReason[r] = (pauseDurationsByReason[r] || 0) + duration;
+                                        totalPauseSeconds += duration;
                                         delete pauseStartMap[processId];
                                     }
                                 });
@@ -2186,7 +2845,10 @@ export default function AdminPage() {
                                 Object.keys(pauseStartMap).forEach(procId => {
                                     const relatedProc = procesosOP.find(p => p.id === procId);
                                     if (relatedProc && relatedProc.estado === 'Pausado') {
-                                        totalPauseSeconds += Math.floor((Date.now() - pauseStartMap[procId]) / 1000);
+                                        const duration = Math.floor((Date.now() - pauseStartMap[procId].timeMs) / 1000);
+                                        const r = pauseStartMap[procId].reason;
+                                        pauseDurationsByReason[r] = (pauseDurationsByReason[r] || 0) + duration;
+                                        totalPauseSeconds += duration;
                                     }
                                 });
 
@@ -2315,6 +2977,64 @@ export default function AdminPage() {
 
                                         </div>
 
+                                        {/* Tiempos Efectivos de la OP */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="glass p-5 rounded-2xl border border-white/10 flex items-center gap-4 bg-gradient-to-br from-success-green/5 to-transparent">
+                                                <div className="p-3 bg-success-green/10 rounded-xl text-success-green border border-success-green/20">
+                                                    <Clock className="h-6 w-6" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">TIEMPO EFECTIVO PROCESO (LINEAL)</p>
+                                                    <h3 className="text-xl font-black text-white mt-1">{formatDuration(totalOPEffectiveProcessSeconds)}</h3>
+                                                    <p className="text-[9px] text-gray-500 font-bold uppercase mt-0.5">Tiempo total de corrida (excluye pausas)</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="glass p-5 rounded-2xl border border-white/10 flex items-center gap-4 bg-gradient-to-br from-primary-blue/5 to-transparent">
+                                                <div className="p-3 bg-primary-blue/10 rounded-xl text-primary-blue border border-primary-blue/20">
+                                                    <Users className="h-6 w-6" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">TIEMPO EFECTIVO HORAS-HOMBRE</p>
+                                                    <h3 className="text-xl font-black text-white mt-1">{formatDuration(totalOPEffectiveHHSeconds)}</h3>
+                                                    <p className="text-[9px] text-gray-500 font-bold uppercase mt-0.5">Esfuerzo real de mano de obra en marcha</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Detalle de Pausas por Motivo */}
+                                        <div className="glass p-6 rounded-3xl border border-white/10 bg-white/5 space-y-6">
+                                            <h3 className="text-lg font-black uppercase text-warning-yellow flex items-center gap-2">
+                                                <Pause className="h-5 w-5" /> DESGLOSE DETALLADO DE PAUSAS Y TIEMPOS MUERTOS
+                                            </h3>
+                                            
+                                            {Object.keys(pauseDurationsByReason).length === 0 ? (
+                                                <p className="text-sm text-gray-500 italic text-center py-6">No se registraron interrupciones o pausas en esta orden de producción.</p>
+                                            ) : (
+                                                <div className="space-y-4">
+                                                    {Object.entries(pauseDurationsByReason)
+                                                        .sort((a, b) => b[1] - a[1]) // Sort descending by duration
+                                                        .map(([reason, seconds]) => {
+                                                            const percentage = totalPauseSeconds > 0 ? (seconds / totalPauseSeconds) * 100 : 0;
+                                                            return (
+                                                                <div key={reason} className="space-y-2">
+                                                                    <div className="flex justify-between items-center text-xs lg:text-sm font-bold">
+                                                                        <span className="text-white uppercase tracking-tight">{reason}</span>
+                                                                        <span className="text-warning-yellow font-mono font-black">{formatDuration(seconds)} ({percentage.toFixed(1)}%)</span>
+                                                                    </div>
+                                                                    <div className="w-full bg-white/5 rounded-full h-2 overflow-hidden border border-white/5">
+                                                                        <div 
+                                                                            className="bg-warning-yellow h-full rounded-full transition-all duration-500" 
+                                                                            style={{ width: `${percentage}%` }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                </div>
+                                            )}
+                                        </div>
+
                                         {/* Comentarios de la OP */}
                                         <div className="glass p-6 rounded-3xl border border-white/10 bg-white/5">
                                             <h3 className="text-lg font-black uppercase text-primary-blue mb-4 flex items-center gap-2">
@@ -2335,13 +3055,18 @@ export default function AdminPage() {
                                                                 </div>
                                                                 <div className="space-y-1">
                                                                     {com.correcciones && com.correcciones.map((corr: any, idx: number) => (
-                                                                        <div key={idx} className="text-xs text-white/50 line-through leading-relaxed italic">
-                                                                            "{corr.comentarioAnterior}"
+                                                                        <div key={idx} className="mb-1.5 last:mb-0 border-l border-white/10 pl-2">
+                                                                            <div className="text-xs text-white/50 line-through leading-relaxed italic">
+                                                                                "{corr.comentarioAnterior}"
+                                                                            </div>
+                                                                            <p className="text-[8px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">
+                                                                                Corregido: {corr.fechaCorreccion ? format((corr.fechaCorreccion as any).toDate(), 'dd/MM/yyyy HH:mm:ss') : 'Reciente'} por {corr.nombreColaborador} • Motivo: {corr.motivo || 'Sin especificar'}
+                                                                            </p>
                                                                         </div>
                                                                     ))}
                                                                     <p className="text-sm text-gray-200 font-medium leading-relaxed italic">"{com.comentario}"</p>
                                                                     {com.correcciones && com.correcciones.length > 0 && (
-                                                                        <p className="text-[9px] text-warning-yellow font-black uppercase tracking-[0.2em] mt-0.5">
+                                                                        <p className="text-[9px] text-warning-yellow font-black uppercase tracking-[0.2em] mt-1 border-l border-warning-yellow/30 pl-2">
                                                                             Última corrección por: {com.correcciones[com.correcciones.length - 1].nombreColaborador} (ID: {com.correcciones[com.correcciones.length - 1].colaboradorId}) • Motivo: {com.correcciones[com.correcciones.length - 1].motivo}
                                                                         </p>
                                                                     )}
@@ -2349,7 +3074,7 @@ export default function AdminPage() {
                                                                 <p className="text-[10px] text-gray-600 font-bold uppercase mt-1 tracking-tighter">Registrado por: {com.nombreColaborador} (PIN/ID: {com.colaboradorId})</p>
                                                             </div>
                                                             <button
-                                                                onClick={() => setCorrectionModal({ show: true, comentarioId: com.id, comentarioActual: com.comentario })}
+                                                                onClick={() => setCorrectionModal({ show: true, comentario: com })}
                                                                 className="p-2 hover:bg-warning-yellow/10 text-warning-yellow rounded-xl transition-all ml-4 shrink-0"
                                                                 title="Corregir comentario (Audit Trail)"
                                                             >
@@ -2371,7 +3096,7 @@ export default function AdminPage() {
                                                 
                                                 // Process pause seconds
                                                 let procPauseSeconds = 0;
-                                                let procPauseStart: number | null = null;
+                                                let procPauseStart: { timeMs: number; reason: string } | null = null;
                                                 const procEvents = resumenEvents
                                                     .filter(evt => evt.procesoId === p.id)
                                                     .sort((a, b) => (a.horaEvento?.seconds || 0) - (b.horaEvento?.seconds || 0));
@@ -2380,14 +3105,21 @@ export default function AdminPage() {
                                                     const eventText = (evt.evento || "").toUpperCase();
                                                     const timeMs = evt.horaEvento?.toMillis?.() || evt.horaEvento?.seconds * 1000 || 0;
                                                     if (eventText.includes('PAUSA')) {
-                                                        procPauseStart = timeMs;
+                                                        procPauseStart = { timeMs, reason: evt.justificacion || '' };
                                                     } else if (eventText.includes('REANUDA') && procPauseStart) {
-                                                        procPauseSeconds += Math.floor((timeMs - procPauseStart) / 1000);
+                                                        const isExcluded = isPauseExcluded(procPauseStart.reason);
+                                                        if (!isExcluded) {
+                                                            procPauseSeconds += Math.floor((timeMs - procPauseStart.timeMs) / 1000);
+                                                        }
                                                         procPauseStart = null;
                                                     }
                                                 });
                                                 if (procPauseStart && p.estado === 'Pausado') {
-                                                    procPauseSeconds += Math.floor((Date.now() - procPauseStart) / 1000);
+                                                    const start = procPauseStart as any;
+                                                    const isExcluded = isPauseExcluded(start.reason);
+                                                    if (!isExcluded) {
+                                                        procPauseSeconds += Math.floor((Date.now() - start.timeMs) / 1000);
+                                                    }
                                                 }
 
                                                 // Process quality times
@@ -2473,6 +3205,14 @@ export default function AdminPage() {
                                                                 <div className="flex justify-between font-bold text-gray-400">
                                                                     <span>PAUSAS:</span>
                                                                     <span className="text-white font-mono">{formatDuration(procPauseSeconds)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between font-bold text-success-green border-t border-white/5 pt-1 mt-1">
+                                                                    <span>EFECTIVO PROCESO:</span>
+                                                                    <span className="font-mono">{formatDuration(p._effectiveProcessSeconds || 0)}</span>
+                                                                </div>
+                                                                <div className="flex justify-between font-bold text-primary-blue">
+                                                                    <span>EFECTIVO H-H:</span>
+                                                                    <span className="font-mono">{formatDuration(p._effectiveHHSeconds || 0)}</span>
                                                                 </div>
                                                             </div>
 
@@ -2670,7 +3410,8 @@ export default function AdminPage() {
                                         pauseStart = timeMs;
                                         lastJustification = evt.justificacion || 'Sin justificar';
                                         const isAcumulado = lastJustification.toUpperCase().includes('ACUMULADO');
-                                        if (!isAcumulado) {
+                                        const isExcluded = isPauseExcluded(lastJustification);
+                                        if (!isAcumulado && !isExcluded) {
                                             if (!pauseReasons[lastJustification]) {
                                                 pauseReasons[lastJustification] = { count: 0, duration: 0 };
                                             }
@@ -2679,20 +3420,24 @@ export default function AdminPage() {
                                             lastJustification = '';
                                         }
                                     } else if (eventText.includes('REANUDA') && pauseStart) {
-                                        const duration = Math.floor((timeMs - pauseStart) / 1000);
-                                        totalPauseSeconds += duration;
-                                        if (lastJustification && pauseReasons[lastJustification]) {
-                                            pauseReasons[lastJustification].duration += duration;
+                                        if (lastJustification) {
+                                            const duration = Math.floor((timeMs - pauseStart) / 1000);
+                                            totalPauseSeconds += duration;
+                                            if (pauseReasons[lastJustification]) {
+                                                pauseReasons[lastJustification].duration += duration;
+                                            }
                                         }
                                         pauseStart = null;
                                     }
                                 });
 
                                 if (pauseStart && p.estado === 'Pausado') {
-                                    const duration = Math.floor((Date.now() - pauseStart) / 1000);
-                                    totalPauseSeconds += duration;
-                                    if (lastJustification && pauseReasons[lastJustification]) {
-                                        pauseReasons[lastJustification].duration += duration;
+                                    if (lastJustification) {
+                                        const duration = Math.floor((Date.now() - pauseStart) / 1000);
+                                        totalPauseSeconds += duration;
+                                        if (pauseReasons[lastJustification]) {
+                                            pauseReasons[lastJustification].duration += duration;
+                                        }
                                     }
                                 }
                             });
@@ -3144,13 +3889,18 @@ export default function AdminPage() {
                                                             </div>
                                                             <div className="space-y-1">
                                                                 {com.correcciones && com.correcciones.map((corr: any, idx: number) => (
-                                                                    <div key={idx} className="text-xs text-white/50 line-through leading-relaxed italic">
-                                                                        "{corr.comentarioAnterior}"
+                                                                    <div key={idx} className="mb-1.5 last:mb-0 border-l border-white/10 pl-2">
+                                                                        <div className="text-xs text-white/50 line-through leading-relaxed italic">
+                                                                            "{corr.comentarioAnterior}"
+                                                                        </div>
+                                                                        <p className="text-[8px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">
+                                                                            Corregido: {corr.fechaCorreccion ? format((corr.fechaCorreccion as any).toDate(), 'dd/MM/yyyy HH:mm:ss') : 'Reciente'} por {corr.nombreColaborador} • Motivo: {corr.motivo || 'Sin especificar'}
+                                                                        </p>
                                                                     </div>
                                                                 ))}
                                                                 <p className="text-sm font-bold text-white">"{com.comentario}"</p>
                                                                 {com.correcciones && com.correcciones.length > 0 && (
-                                                                    <p className="text-[9px] text-warning-yellow font-black uppercase tracking-[0.2em] mt-0.5">
+                                                                    <p className="text-[9px] text-warning-yellow font-black uppercase tracking-[0.2em] mt-1 border-l border-warning-yellow/30 pl-2">
                                                                         Última corrección por: {com.correcciones[com.correcciones.length - 1].nombreColaborador} (ID: {com.correcciones[com.correcciones.length - 1].colaboradorId}) • Motivo: {com.correcciones[com.correcciones.length - 1].motivo}
                                                                     </p>
                                                                 )}
@@ -3392,6 +4142,411 @@ export default function AdminPage() {
                                 <div className="p-20 text-center text-gray-500 font-bold uppercase tracking-widest text-xs">No hay artículos registrados</div>
                             )}
                         </div>
+                    </>
+                )}
+
+                {/* TAB: COMPARAR ARTICULOS */}
+                {tab === 'compararArticulos' && (
+                    <>
+                        <div className="flex items-center justify-between mb-8">
+                            <h2 className="text-xl font-black uppercase tracking-widest text-amber-400">Comparar Procesos por Artículo</h2>
+                        </div>
+
+                        <div className="glass p-6 rounded-3xl border border-white/10 mb-8 bg-white/5 space-y-6">
+                            <div>
+                                <label className="block text-xs font-black text-gray-500 uppercase mb-2">Seleccione un Artículo</label>
+                                <select
+                                    value={selectedArticulo}
+                                    onChange={(e) => setSelectedArticulo(e.target.value)}
+                                    className="w-full bg-white border border-gray-300 text-black rounded-2xl p-4 font-bold outline-none focus:ring-4 focus:ring-amber-400/20 transition-all text-base cursor-pointer"
+                                >
+                                    <option value="">-- SELECCIONE UN ARTÍCULO --</option>
+                                    {articulos.map(art => (
+                                        <option key={art.id} value={art.codigo}>
+                                            {art.codigo} - {art.descripcion}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {selectedArticulo && (
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-white/5 pt-6 text-sm">
+                                    <div>
+                                        <span className="text-xs text-gray-500 font-bold uppercase block">Código</span>
+                                        <strong className="text-white uppercase font-mono">{selectedArticulo}</strong>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-gray-500 font-bold uppercase block">Producto</span>
+                                        <strong className="text-white uppercase">{articulos.find(a => a.codigo === selectedArticulo)?.descripcion || 'N/A'}</strong>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-gray-500 font-bold uppercase block">Velocidad Teórica</span>
+                                        <strong className="text-success-green font-mono">{articulos.find(a => a.codigo === selectedArticulo)?.velocidadTeorica || 0} uds/min</strong>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {selectedArticulo && (
+                            <div className="glass rounded-3xl overflow-hidden border border-white/10 bg-white/5 animate-in fade-in duration-500">
+                                {loadingComparacion ? (
+                                    <div className="p-20 text-center text-gray-400 font-bold uppercase tracking-widest text-xs flex flex-col items-center justify-center gap-4">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-4 border-amber-400 border-t-transparent" />
+                                        <span>Procesando y calculando métricas...</span>
+                                    </div>
+                                ) : comparacionData.length === 0 ? (
+                                    <div className="p-20 text-center text-gray-500 font-bold uppercase tracking-widest text-xs">No hay procesos registrados para este artículo</div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left text-xs whitespace-nowrap">
+                                            <thead>
+                                                <tr className="bg-white/5 border-b border-white/10 text-[9px] font-black uppercase text-gray-500 tracking-wider">
+                                                    <th className="p-4">OP / Lote / Etapa</th>
+                                                    <th className="p-4">Líder</th>
+                                                    <th className="p-4">Cantidades (Progreso)</th>
+                                                    <th className="p-4 text-center">Eficiencia</th>
+                                                    <th className="p-4 text-center">Setup</th>
+                                                    <th className="p-4 text-center">Pausas</th>
+                                                    <th className="p-4 text-center">Tiempo Proceso</th>
+                                                    <th className="p-4 text-center">Tiempo H-H</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-white/5 text-gray-300 font-medium">
+                                                {comparacionData.map(p => {
+                                                    const progress = p.cantidadProducir > 0 ? Math.min(100, (p.trabajoCompletado / p.cantidadProducir) * 100) : 0;
+                                                    const efficiency = p.velocidadTeorica > 0 ? ((p.trabajoCompletado / (p.cantidadProducir || 1)) * 100) : 0;
+                                                    
+                                                    return (
+                                                        <tr key={p.id} className="hover:bg-white/[0.01]">
+                                                            <td className="p-4">
+                                                                <div className="font-bold text-white uppercase font-mono">{p.ordenProduccion}</div>
+                                                                <div className="text-[10px] text-gray-400 font-mono mt-0.5">Lote: {p.lote}</div>
+                                                                <span className="inline-block bg-white/5 border border-white/10 text-[8px] font-black text-amber-400 px-2 py-0.5 rounded uppercase mt-1 tracking-wider">{p.etapa}</span>
+                                                            </td>
+                                                            <td className="p-4 uppercase text-gray-400 font-bold">{p.lider || 'N/A'}</td>
+                                                            <td className="p-4">
+                                                                <div className="font-mono text-white font-bold">{p.trabajoCompletado} / {p.cantidadProducir}</div>
+                                                                <div className="text-[10px] text-gray-500 font-mono mt-0.5">{progress.toFixed(1)}% completo</div>
+                                                            </td>
+                                                            <td className="p-4 text-center">
+                                                                <span className={cn(
+                                                                    "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border",
+                                                                    efficiency >= 95 ? "bg-success-green/10 border-success-green/20 text-success-green" :
+                                                                    efficiency >= 80 ? "bg-warning-yellow/10 border-warning-yellow/20 text-warning-yellow" :
+                                                                    "bg-danger-red/10 border-danger-red/20 text-danger-red"
+                                                                )}>
+                                                                    {efficiency.toFixed(1)}%
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-4 text-center font-mono">{formatDuration(p.tiempoSetupSegundos || 0)}</td>
+                                                            <td className="p-4 text-center font-mono text-warning-yellow">{formatDuration(p.procPauseSeconds || 0)}</td>
+                                                            <td className="p-4 text-center font-mono text-success-green font-bold">{formatDuration(p.effectiveProcessSeconds || 0)}</td>
+                                                            <td className="p-4 text-center font-mono text-primary-blue font-bold">{formatDuration(p.effectiveHHSeconds || 0)}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {/* TAB: HORAS DE COLABORADOR */}
+                {tab === 'historialColaborador' && (
+                    <>
+                        <div className="flex items-center justify-between mb-8">
+                            <h2 className="text-xl font-black uppercase tracking-widest text-pink-400">Reporte de Tiempos por Colaborador</h2>
+                        </div>
+
+                        <form onSubmit={handleGenerateColaboradorReport} className="glass p-6 rounded-3xl border border-white/10 mb-8 bg-white/5">
+                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6 border-b border-white/5 pb-4">
+                                <span className="text-xs font-black uppercase text-gray-400 tracking-widest">Parámetros de Consulta</span>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSetPeriod('hoy')}
+                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-white/10 hover:border-pink-400/30"
+                                    >
+                                        Hoy
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSetPeriod('semana')}
+                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-white/10 hover:border-pink-400/30"
+                                    >
+                                        Esta Semana
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSetPeriod('mes')}
+                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-white/10 hover:border-pink-400/30"
+                                    >
+                                        Este Mes
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                                <div className="space-y-2 md:col-span-1">
+                                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider">Seleccione un Colaborador</label>
+                                    <select
+                                        value={colaboradorReportId}
+                                        onChange={(e) => {
+                                            setColaboradorReportId(e.target.value);
+                                            setColaboradorReportData(null);
+                                        }}
+                                        className="w-full bg-white border border-gray-300 text-black rounded-2xl p-4 font-bold outline-none focus:ring-4 focus:ring-pink-400/20 transition-all text-base cursor-pointer"
+                                        required
+                                    >
+                                        <option value="">-- SELECCIONE UN COLABORADOR --</option>
+                                        {colaboradores.map(c => (
+                                            <option key={c.id} value={c.id}>
+                                                {c.nombreCompleto} ({c.id})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider">Fecha Inicio</label>
+                                    <input
+                                        type="date"
+                                        value={colaboradorReportStartDate}
+                                        onChange={(e) => {
+                                            setColaboradorReportStartDate(e.target.value);
+                                            setColaboradorReportData(null);
+                                        }}
+                                        className="w-full bg-white border border-gray-300 text-black rounded-2xl p-4 font-bold outline-none focus:ring-4 focus:ring-pink-400/20 transition-all text-base cursor-pointer font-mono"
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-black text-gray-500 uppercase tracking-wider">Fecha Fin</label>
+                                    <input
+                                        type="date"
+                                        value={colaboradorReportEndDate}
+                                        onChange={(e) => {
+                                            setColaboradorReportEndDate(e.target.value);
+                                            setColaboradorReportData(null);
+                                        }}
+                                        className="w-full bg-white border border-gray-300 text-black rounded-2xl p-4 font-bold outline-none focus:ring-4 focus:ring-pink-400/20 transition-all text-base cursor-pointer font-mono"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={colaboradorReportLoading || !colaboradorReportId || !colaboradorReportStartDate || !colaboradorReportEndDate}
+                                className="w-full mt-6 bg-pink-400 hover:bg-pink-500 text-black font-black py-4 rounded-2xl transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2 shadow-lg shadow-pink-400/10 disabled:opacity-50"
+                            >
+                                {colaboradorReportLoading ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-black border-t-transparent" />
+                                        <span>Procesando Rango...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <BarChart3 className="h-4 w-4" />
+                                        <span>Generar Reporte por Rango</span>
+                                    </>
+                                )}
+                            </button>
+                        </form>
+
+                        {colaboradorReportData && (
+                            <div className="space-y-8 animate-in fade-in duration-500">
+                                <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                                    {/* Card 1: Tiempo en Planta */}
+                                    <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[110px] bg-gradient-to-br from-white/5 to-transparent col-span-1">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Tiempo en Planta</span>
+                                        <div className="mt-2">
+                                            <h3 className="text-2xl font-black text-white font-mono">{formatDuration(colaboradorReportData.totalPermanenceSeconds || colaboradorReportData.totalSeconds)}</h3>
+                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Presencia lineal (Jornada)</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Card 2: Tiempo en Procesos */}
+                                    <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[110px] bg-gradient-to-br from-primary-blue/15 to-transparent col-span-1">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-primary-blue">Tiempo en Procesos</span>
+                                        <div className="mt-2">
+                                            <h3 className="text-2xl font-black text-primary-blue font-mono">{formatDuration(colaboradorReportData.totalSeconds)}</h3>
+                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Suma de fichajes</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Card 3: Tiempo Inactivo */}
+                                    <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[110px] bg-gradient-to-br from-warning-yellow/15 to-transparent col-span-1">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-warning-yellow">Tiempo Inactivo</span>
+                                        <div className="mt-2">
+                                            <h3 className="text-2xl font-black text-warning-yellow font-mono">{formatDuration(colaboradorReportData.totalInactiveSeconds)}</h3>
+                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Fuera de registro</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Card 4: Tiempo Efectivo */}
+                                    <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[110px] bg-gradient-to-br from-success-green/15 to-transparent col-span-1">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-success-green">Tiempo Efectivo</span>
+                                        <div className="mt-2">
+                                            <h3 className="text-2xl font-black text-success-green font-mono">{formatDuration(colaboradorReportData.effectiveSeconds)}</h3>
+                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Descontando pausas</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Card 5: Aprovechamiento */}
+                                    <div className="glass p-5 rounded-2xl border border-white/10 flex flex-col justify-between min-h-[110px] bg-gradient-to-br from-pink-400/15 to-transparent col-span-2 lg:col-span-1">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-pink-400">Eficiencia Neto</span>
+                                        <div className="mt-2">
+                                            <h3 className="text-2xl font-black text-pink-400 font-mono">
+                                                {colaboradorReportData.totalPermanenceSeconds > 0
+                                                    ? ((colaboradorReportData.effectiveSeconds / colaboradorReportData.totalPermanenceSeconds) * 100).toFixed(1)
+                                                    : colaboradorReportData.totalSeconds > 0
+                                                        ? ((colaboradorReportData.effectiveSeconds / colaboradorReportData.totalSeconds) * 100).toFixed(1)
+                                                        : '0.0'}%
+                                            </h3>
+                                            <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Efectivo vs Planta</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="glass rounded-3xl overflow-hidden border border-white/10 bg-white/5">
+                                    <div className="p-6 border-b border-white/5 bg-white/5">
+                                        <h3 className="text-sm font-black uppercase text-white tracking-wider">Desglose de Participación en Líneas</h3>
+                                    </div>
+                                    {colaboradorReportData.breakdown.length === 0 ? (
+                                        <div className="p-20 text-center text-gray-500 font-bold uppercase tracking-widest text-xs">No hay actividad registrada en esta fecha</div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left text-xs whitespace-nowrap">
+                                                <thead>
+                                                    <tr className="bg-white/5 border-b border-white/10 text-[9px] font-black uppercase text-gray-500 tracking-wider">
+                                                        <th className="p-4">Proceso / OP</th>
+                                                        <th className="p-4">Producto</th>
+                                                        <th className="p-4">Ingreso</th>
+                                                        <th className="p-4">Salida</th>
+                                                        <th className="p-4 text-center">Rol</th>
+                                                        <th className="p-4 text-right">Tiempo Permanencia</th>
+                                                        <th className="p-4 text-right text-success-green">Tiempo Efectivo</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-white/5 text-gray-300 font-medium">
+                                                    {colaboradorReportData.breakdown.map((item: any, idx: number) => {
+                                                        const isLastOfToday = !colaboradorReportData.breakdown.some((other: any, otherIdx: number) => {
+                                                            if (otherIdx <= idx) return false;
+                                                            return format(other.entry, 'dd/MM/yyyy') === format(item.entry, 'dd/MM/yyyy');
+                                                        });
+                                                        return (
+                                                            <tr key={item.id} className="hover:bg-white/[0.01]">
+                                                                <td className="p-4">
+                                                                    <div className="font-bold text-white uppercase font-mono">{item.op}</div>
+                                                                    <span className="inline-block bg-white/5 border border-white/10 text-[8px] font-black text-pink-400 px-2 py-0.5 rounded uppercase mt-1 tracking-wider">{item.etapa}</span>
+                                                                </td>
+                                                                <td className="p-4 uppercase text-gray-400 font-bold max-w-xs truncate">{item.producto || 'N/A'}</td>
+                                                                <td className="p-4 font-mono">{format(item.entry, 'dd/MM/yyyy HH:mm:ss')}</td>
+                                                                <td className="p-4 font-mono">
+                                                                    {item.exit ? (
+                                                                        <div>
+                                                                            <div>{format(item.exit, 'dd/MM/yyyy HH:mm:ss')}</div>
+                                                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                                                {item.motivoSalida && (
+                                                                                    <span className="inline-block text-[8px] font-black text-warning-yellow uppercase bg-warning-yellow/10 border border-warning-yellow/20 px-2 py-0.5 rounded font-sans">
+                                                                                        {item.motivoSalida}
+                                                                                    </span>
+                                                                                )}
+                                                                                {isLastOfToday && (
+                                                                                    <span className="inline-block text-[8px] font-black text-pink-400 uppercase bg-pink-400/10 border border-pink-400/20 px-2 py-0.5 rounded font-sans">
+                                                                                        ÚLTIMA SALIDA DEL DÍA
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : (
+                                                                        item.estadoProceso === 'Iniciado' ? <span className="text-success-green animate-pulse">ACTIVO</span> : '-'
+                                                                    )}
+                                                                </td>
+                                                                <td className="p-4 text-center">
+                                                                    <span className={cn(
+                                                                        "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border",
+                                                                        item.tipo === 'setup' ? "bg-accent-purple/10 border-accent-purple/20 text-accent-purple" : "bg-primary-blue/10 border-primary-blue/20 text-primary-blue"
+                                                                    )}>
+                                                                        {item.tipo}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="p-4 text-right font-mono font-bold text-white">{formatDuration(item.totalDuration)}</td>
+                                                                <td className="p-4 text-right font-mono font-bold text-success-green">{formatDuration(item.effectiveDuration)}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Desglose de Periodos Inactivos */}
+                                <div className="glass rounded-3xl overflow-hidden border border-white/10 bg-white/5">
+                                    <div className="p-6 border-b border-white/5 bg-white/5 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                                        <h3 className="text-sm font-black uppercase text-white tracking-wider">Desglose de Periodos Inactivos (Fuera de Línea)</h3>
+                                        <span className="text-[10px] font-black uppercase text-warning-yellow bg-warning-yellow/10 border border-warning-yellow/20 px-3 py-1 rounded-full self-start sm:self-auto font-mono">
+                                            Total Inactivo: {formatDuration(colaboradorReportData.totalInactiveSeconds)}
+                                        </span>
+                                    </div>
+                                    {colaboradorReportData.inactiveGaps.length === 0 ? (
+                                        <div className="p-16 text-center text-gray-500 font-bold uppercase tracking-widest text-xs">No se registraron periodos de inactividad entre procesos en este rango</div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left text-xs whitespace-nowrap">
+                                                <thead>
+                                                    <tr className="bg-white/5 border-b border-white/10 text-[9px] font-black uppercase text-gray-500 tracking-wider">
+                                                        <th className="p-4">Fecha</th>
+                                                        <th className="p-4">Inicio de Inactividad</th>
+                                                        <th className="p-4">Fin de Inactividad</th>
+                                                        <th className="p-4">Motivo / Causa de Salida</th>
+                                                        <th className="p-4 text-right">Duración Inactivo</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-white/5 text-gray-300 font-medium font-mono">
+                                                    {colaboradorReportData.inactiveGaps.map((gap: any, idx: number) => {
+                                                        const isLastGapOfToday = !colaboradorReportData.inactiveGaps.some((other: any, otherIdx: number) => {
+                                                            if (otherIdx <= idx) return false;
+                                                            return other.fecha === gap.fecha;
+                                                        });
+                                                        return (
+                                                            <tr key={gap.id} className="hover:bg-white/[0.01]">
+                                                                <td className="p-4 text-gray-400 font-sans font-bold">{gap.fecha}</td>
+                                                                <td className="p-4">{format(gap.inicio, 'HH:mm:ss')}</td>
+                                                                <td className="p-4">
+                                                                    {gap.fin ? (
+                                                                        format(gap.fin, 'HH:mm:ss')
+                                                                    ) : (
+                                                                        <span className="inline-block text-[9px] font-black text-danger-red uppercase bg-danger-red/10 border border-danger-red/20 px-2 py-0.5 rounded font-sans animate-pulse">
+                                                                            NO REGRESÓ / FIN JORNADA
+                                                                        </span>
+                                                                    )}
+                                                                </td>
+                                                                <td className="p-4">
+                                                                    <div className="flex flex-wrap items-center gap-2">
+                                                                        <span className="text-gray-200 uppercase font-sans font-bold">{gap.motivo}</span>
+                                                                        {isLastGapOfToday && (
+                                                                            <span className="inline-block text-[8px] font-black text-pink-400 uppercase bg-pink-400/10 border border-pink-400/20 px-2 py-0.5 rounded font-sans animate-pulse">
+                                                                                ÚLTIMA SALIDA DEL DÍA
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                                <td className="p-4 text-right text-warning-yellow font-bold">
+                                                                    {gap.duracion !== null ? formatDuration(gap.duracion) : '-'}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </>
                 )}
             </div>
@@ -3744,8 +4899,7 @@ export default function AdminPage() {
             )}
             {correctionModal && correctionModal.show && (
                 <ModalCorregirComentario
-                    comentarioId={correctionModal.comentarioId}
-                    comentarioActual={correctionModal.comentarioActual}
+                    comentario={correctionModal.comentario}
                     onClose={() => setCorrectionModal(null)}
                     onSuccess={(msg) => alert(msg)}
                 />

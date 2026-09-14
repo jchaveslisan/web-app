@@ -50,6 +50,7 @@ export default function ProcesosPage() {
         'Finalizado': false
     });
     const [refreshKey, setRefreshKey] = useState(0);
+    const [isMounted, setIsMounted] = useState(false);
     const [colaboradoresPorProceso, setColaboradoresPorProceso] = useState<Record<string, any[]>>({});
     const [allColaboradores, setAllColaboradores] = useState<any[]>([]);
     const [activeLogs, setActiveLogs] = useState<any[]>([]);
@@ -57,12 +58,15 @@ export default function ProcesosPage() {
     const user = useAuthStore(state => state.user);
     const router = useRouter();
 
-    const [activeTab, setActiveTab] = useState<TipoProceso | 'personal'>(() => {
-        if (typeof window !== 'undefined') {
-            return (localStorage.getItem('activeProcesosTab') as any) || 'empaque';
+    const [activeTab, setActiveTab] = useState<TipoProceso | 'personal'>('empaque');
+
+    // Cargar pestaña de localStorage al montar en el cliente
+    useEffect(() => {
+        const savedTab = localStorage.getItem('activeProcesosTab') as TipoProceso | 'personal';
+        if (savedTab) {
+            setActiveTab(savedTab);
         }
-        return 'empaque';
-    });
+    }, []);
 
     // Guardar la pestaña cuando cambia
     useEffect(() => {
@@ -78,6 +82,7 @@ export default function ProcesosPage() {
 
     // Re-renderizar cada segundo para actualizar temporizador y unidades
     useEffect(() => {
+        setIsMounted(true);
         const timer = setInterval(() => {
             setRefreshKey(prev => prev + 1);
         }, 1000);
@@ -611,42 +616,87 @@ export default function ProcesosPage() {
                                                             <td className="p-5 text-center">
                                                                 <div className="flex flex-col items-center gap-1">
                                                                     <span className="text-sm font-bold text-success-green">
-                                                                        {proceso.utilizaTemporizador ?
+                                                                        {!isMounted ? '...' : (proceso.utilizaTemporizador ?
                                                                             `${getUnidadesPendientes(proceso).toLocaleString('es-ES', { maximumFractionDigits: 1 })} / ${proceso.cantidadProducir}`
-                                                                            : 'N/A'
+                                                                            : 'N/A')
                                                                         }
                                                                     </span>
                                                                 </div>
                                                             </td>
                                                             <td className="p-5 text-center">
                                                                 <div className="flex flex-col items-center gap-2">
-                                                                    {proceso.utilizaTemporizador ? (
+                                                                    {!isMounted ? (
+                                                                        <span className="text-lg font-bold font-mono text-gray-500">...</span>
+                                                                    ) : proceso.utilizaTemporizador ? (
+                                                                        (() => {
+                                                                            const colabs = colaboradoresPorProceso[proceso.id] || [];
+                                                                            const activos = colabs.filter((c: any) => !c.horaSalida && c.tipo === 'colaborador');
+                                                                            const { isGracePeriod, isTiempoExtra } = getEstadoTemporizador(proceso);
+
+                                                                            if (proceso.estado === 'Pausado' || (proceso as any).pausadoPorFaltaDePersonal) {
+                                                                                return (
+                                                                                    <span className="text-sm font-black uppercase tracking-wider text-warning-yellow">
+                                                                                        Pausado
+                                                                                    </span>
+                                                                                );
+                                                                            }
+
+                                                                            if (proceso.estado === 'Finalizado') {
+                                                                                if (isTiempoExtra) {
+                                                                                    return (
+                                                                                        <span className="text-sm font-black tracking-wider text-danger-red uppercase animate-pulse font-mono">
+                                                                                            +{getTiempoRestanteEstimado(proceso)}
+                                                                                        </span>
+                                                                                    );
+                                                                                } else {
+                                                                                    return (
+                                                                                        <span className="text-sm font-black uppercase tracking-wider text-success-green">
+                                                                                            A Tiempo
+                                                                                        </span>
+                                                                                    );
+                                                                                }
+                                                                            }
+
+                                                                            if (proceso.estado === 'Iniciado') {
+                                                                                if (activos.length === 0) {
+                                                                                    return (
+                                                                                        <span className="text-sm font-black uppercase tracking-wider text-warning-yellow">
+                                                                                            Pausado
+                                                                                        </span>
+                                                                                    );
+                                                                                } else {
+                                                                                    return (
+                                                                                        <span className={cn(
+                                                                                            "text-lg font-bold font-mono transition-colors duration-500",
+                                                                                            isTiempoExtra ? 'text-danger-red animate-pulse' :
+                                                                                            isGracePeriod ? 'text-warning-yellow' : 'text-white'
+                                                                                        )}>
+                                                                                            {getTiempoRestanteEstimado(proceso)}
+                                                                                        </span>
+                                                                                    );
+                                                                                }
+                                                                            }
+
+                                                                            return (
+                                                                                <span className="text-sm font-bold font-mono text-gray-500">
+                                                                                    -
+                                                                                </span>
+                                                                            );
+                                                                        })()
+                                                                    ) : (
                                                                         <>
+                                                                            <span className="text-lg font-bold font-mono text-gray-500">N/A</span>
                                                                             <span className={cn(
-                                                                                "text-lg font-bold font-mono transition-colors duration-500",
-                                                                                (() => {
-                                                                                    const { isGracePeriod, isTiempoExtra } = getEstadoTemporizador(proceso);
-                                                                                    if (isTiempoExtra) return 'text-danger-red animate-pulse';
-                                                                                    if (isGracePeriod) return 'text-warning-yellow';
-                                                                                    if (proceso.estado === 'Iniciado') return 'text-white';
-                                                                                    return 'text-gray-600';
-                                                                                })()
+                                                                                "text-xs font-medium px-2 py-0.5 rounded-full",
+                                                                                proceso.estado === 'Finalizado' ? 'bg-gray-700/30 text-gray-300' :
+                                                                                    proceso.estado === 'Pausado' ? 'bg-warning-yellow/20 text-warning-yellow' :
+                                                                                        proceso.estado === 'Iniciado' ? 'bg-success-green/20 text-success-green' :
+                                                                                            'bg-primary-blue/20 text-primary-blue'
                                                                             )}>
-                                                                                {getTiempoRestanteEstimado(proceso)}
+                                                                                {proceso.estado}
                                                                             </span>
                                                                         </>
-                                                                    ) : (
-                                                                        <span className="text-lg font-bold font-mono text-gray-500">N/A</span>
                                                                     )}
-                                                                    <span className={cn(
-                                                                        "text-xs font-medium px-2 py-0.5 rounded-full",
-                                                                        proceso.estado === 'Finalizado' ? 'bg-gray-700/30 text-gray-300' :
-                                                                            proceso.estado === 'Pausado' ? 'bg-warning-yellow/20 text-warning-yellow' :
-                                                                                proceso.estado === 'Iniciado' ? 'bg-success-green/20 text-success-green' :
-                                                                                    'bg-primary-blue/20 text-primary-blue'
-                                                                    )}>
-                                                                        {proceso.estado}
-                                                                    </span>
                                                                 </div>
                                                             </td>
                                                             <td className="p-5 text-right flex items-center justify-end gap-2">
