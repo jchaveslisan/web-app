@@ -355,11 +355,11 @@ export const executeBulkExit = async (
             console.log(`⚠️ Supervisor NO es participante activo. Verificando rol...`);
         }
 
-        // OPCIÓN B: Check if supervisor is supervisor/superadmin
+        // OPCIÓN B: Check if current logged-in user or PIN belongs to supervisor/superadmin
         if (!esAutorizado && userId) {
             console.log(`🔍 Verificando rol del usuario en collection 'usuarios'...`);
             try {
-                const usuarioSnap = await getDoc(doc(db, 'usuarios', supervisorId));
+                const usuarioSnap = await getDoc(doc(db, 'usuarios', userId));
                 if (usuarioSnap.exists()) {
                     const usuario = usuarioSnap.data();
                     console.log(`📋 Rol encontrado: ${usuario?.rol}`);
@@ -367,33 +367,27 @@ export const executeBulkExit = async (
                         esAutorizado = true;
                         razonAutorizacion = `Rol: ${usuario.rol}`;
                         console.log(`✅ AUTORIZADO: Usuario es ${usuario.rol}`);
-                    } else {
-                        console.log(`❌ Rol '${usuario?.rol}' no tiene permisos`);
                     }
-                } else {
-                    console.log(`⚠️ No existe documento de usuario`);
                 }
             } catch (e) {
                 console.error(`Error verificando rol:`, e);
             }
         }
 
-        // FALLBACK: Check if PIN itself belongs to a supervisor/superadmin
-        // This handles case where user hasn't been set up in 'usuarios' collection
         if (!esAutorizado) {
-            console.log(`🔍 FALLBACK: Verificando si el PIN pertenece a un supervisor...`);
-            // Try to find supervisor records by PIN in colaboradores_log
-            const supervisorCollabSnap = await getDocs(
-                query(
-                    collection(db, 'colaboradores_log'),
-                    where('colaboradorId', '==', supervisorPin_value)
-                )
-            );
-
-            if (supervisorCollabSnap.docs.length > 0) {
-                console.log(`✅ FALLBACK AUTORIZADO: PIN existe como participante activo en otros procesos`);
-                esAutorizado = true;
-                razonAutorizacion = 'PIN válido del sistema';
+            try {
+                const uSnap = await getDocs(
+                    query(collection(db, 'usuarios'), where('username', '==', supervisorPin.trim().toLowerCase()))
+                );
+                if (!uSnap.empty) {
+                    const uData = uSnap.docs[0].data();
+                    if (['supervisor', 'superadmin'].includes(uData?.rol)) {
+                        esAutorizado = true;
+                        razonAutorizacion = `Usuario: ${uData.rol}`;
+                    }
+                }
+            } catch (e) {
+                console.error(`Error verificando admin por PIN:`, e);
             }
         }
 
@@ -429,17 +423,27 @@ export const executeBulkExit = async (
         const exitCount = personalActivoSnap.docs.length;
         console.log(`📋 ${exitCount} persona(s) será(n) dado(s) de baja`);
 
-        // 4. Batch update all active personnel with exit timestamp
+        // 4. Batch update all active personnel with exit timestamp and justification
         const batch = writeBatch(db);
 
         personalActivoSnap.docs.forEach((docSnap) => {
             batch.update(docSnap.ref, {
                 horaSalida: now,
-                modificadoEn: now
+                modificadoEn: now,
+                justificacionSalida: justification
             });
         });
 
-        // 5. Log single event documenting bulk exit
+        // 5. Update process state to Pausado since all personnel exited
+        const procesoRef = doc(db, 'procesos', procesoId);
+        batch.update(procesoRef, {
+            estado: 'Pausado',
+            pausadoPorFaltaDePersonal: true,
+            modificadoEn: now,
+            ultimoUpdate: now
+        });
+
+        // 6. Log single event documenting bulk exit
         await addDoc(collection(db, 'eventos_log'), {
             procesoId,
             horaEvento: now,
@@ -449,7 +453,7 @@ export const executeBulkExit = async (
             registradoPorUsuario: supervisorDisplayName
         });
 
-        // 6. Commit batch
+        // 7. Commit batch
         await batch.commit();
         clearActiveColaboradoresCache();
         console.log(`✅ Salida masiva completada exitosamente`);
