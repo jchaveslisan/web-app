@@ -835,8 +835,13 @@ export default function MonitoreoPage() {
                             {proceso.estado !== 'Registrado' && (
                                 <div className="absolute top-0 left-0 w-full h-1.5 bg-white/5">
                                     <div
-                                        className="h-full bg-primary-blue shadow-[0_0_20px_rgba(59,130,246,1)] transition-all duration-1000"
-                                        style={{ width: `${stats.porcentajeCompletado}%` }}
+                                        className={cn(
+                                            "h-full transition-all duration-1000",
+                                            proceso.estado === 'Finalizado'
+                                                ? "bg-gray-500"
+                                                : "bg-primary-blue shadow-[0_0_20px_rgba(59,130,246,1)]"
+                                        )}
+                                        style={{ width: proceso.estado === 'Finalizado' ? '100%' : `${stats.porcentajeCompletado}%` }}
                                     />
                                 </div>
                             )}
@@ -847,9 +852,17 @@ export default function MonitoreoPage() {
                                     <p className="text-[clamp(0.7rem,1.2vw,0.875rem)] font-black text-gray-500 uppercase tracking-[0.6em] mb-4 md:mb-6">ESTADO DEL PROCESO</p>
                                     <h2 className={cn(
                                         "text-[clamp(4rem,15vw,9rem)] font-black tracking-tighter leading-none transition-colors duration-500 select-none",
-                                        personalActivo > 0 ? "text-success-green" : "text-warning-yellow"
+                                        proceso.estado === 'Finalizado'
+                                            ? "text-gray-500"
+                                            : personalActivo > 0
+                                                ? "text-success-green"
+                                                : "text-warning-yellow"
                                     )}>
-                                        {personalActivo > 0 ? "EN PROCESO" : "EN PAUSA"}
+                                        {proceso.estado === 'Finalizado'
+                                            ? "FINALIZADO"
+                                            : personalActivo > 0
+                                                ? "EN PROCESO"
+                                                : "EN PAUSA"}
                                     </h2>
                                 </>
                             ) : (
@@ -960,6 +973,21 @@ export default function MonitoreoPage() {
                                         )}
                                     </>
                                 )}
+
+                                {/* Production Buttons para Procesos Anexos */}
+                                {getTipoProcesoReal(proceso) === 'anexos' && (
+                                    <>
+                                        {proceso.estado !== 'Finalizado' && (
+                                            <button
+                                                type="button"
+                                                className="w-full sm:w-auto bg-danger-red/10 hover:bg-danger-red hover:text-white text-danger-red border border-danger-red/20 px-8 md:px-12 py-4 md:py-5 rounded-3xl font-black text-lg md:text-xl flex items-center justify-center gap-4 transition-all shadow-xl shadow-danger-red/10"
+                                                onClick={handleFinalizarProceso}
+                                            >
+                                                <Square className="h-6 w-6 md:h-7 md:w-7 fill-current" /> FINALIZAR PROCESO
+                                            </button>
+                                        )}
+                                    </>
+                                )}
                             </div>
 
                             {/* CONTROL DE PERSONAL EXPRESS */}
@@ -1032,7 +1060,7 @@ export default function MonitoreoPage() {
                                         </div>
                                     )}
 
-                                    {personalActivo > 0 && proceso.estado === 'Pausado' && (
+                                    {personalActivo > 0 && proceso.estado !== 'Finalizado' && (proceso.estado === 'Pausado' || getTipoProcesoReal(proceso) === 'anexos') && (
                                         <button
                                             type="button"
                                             onClick={() => setShowModalBulkExit(true)}
@@ -1192,7 +1220,7 @@ export default function MonitoreoPage() {
             {showModalBulkExit && (
                 <ModalBulkExit
                     procesoId={id}
-                    userId={(user as any)?.uid}
+                    userId={user?.id || (user as any)?.uid}
                     onClose={() => setShowModalBulkExit(false)}
                     onSuccess={(exitCount) => {
                         setStaffMessage({
@@ -1284,10 +1312,24 @@ export default function MonitoreoPage() {
                                         <div className="space-y-10">
                                             {/* SECCIÓN ACTIVO */}
                                             <section>
-                                                <div className="flex items-center gap-4 mb-6">
-                                                    <div className="h-px flex-1 bg-success-green/20" />
-                                                    <h4 className="text-[10px] font-black text-success-green uppercase tracking-[0.4em]">Personal Activo ({activos.length})</h4>
-                                                    <div className="h-px flex-1 bg-success-green/20" />
+                                                <div className="flex items-center justify-between gap-4 mb-6">
+                                                    <div className="flex items-center gap-4 flex-1">
+                                                        <div className="h-px flex-1 bg-success-green/20" />
+                                                        <h4 className="text-[10px] font-black text-success-green uppercase tracking-[0.4em]">Personal Activo ({activos.length})</h4>
+                                                        <div className="h-px flex-1 bg-success-green/20" />
+                                                    </div>
+                                                    {activos.length > 0 && proceso.estado !== 'Finalizado' && (proceso.estado === 'Pausado' || getTipoProcesoReal(proceso) === 'anexos') && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setShowStaffModal(false);
+                                                                setShowModalBulkExit(true);
+                                                            }}
+                                                            className="bg-warning-yellow text-black px-4 py-2 rounded-xl font-black text-xs uppercase flex items-center gap-2 hover:bg-yellow-600 transition-all shrink-0 shadow-lg shadow-yellow-500/10"
+                                                        >
+                                                            <LogOut className="h-3.5 w-3.5" /> SALIDA GRUPAL
+                                                        </button>
+                                                    )}
                                                 </div>
                                                 <div className="grid grid-cols-1 gap-3">
                                                     {activos.length === 0 ? (
