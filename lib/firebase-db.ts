@@ -39,7 +39,7 @@ export {
 };
 import { db } from './firebase';
 export { db };
-import { Proceso, ColaboradorLog, EventoLog, User, ColaboradorMaestro, Justificacion, Etapa, OrdenMaestra, Comentario, MotivoCorreccion } from '@/types';
+import { Proceso, ColaboradorLog, EventoLog, User, ColaboradorMaestro, Justificacion, Etapa, OrdenMaestra, Comentario, MotivoCorreccion, MedicionVelocidad } from '@/types';
 
 // --- USUARIOS ---
 export const getUsuario = async (uid: string): Promise<User | null> => {
@@ -568,5 +568,61 @@ export const getMotivosCorreccion = async (): Promise<MotivoCorreccion[]> => {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MotivoCorreccion));
 };
+
+// --- MEDICIONES DE VELOCIDAD DE EMPAQUE ---
+export const addMedicionVelocidad = async (medicion: Omit<MedicionVelocidad, 'id' | 'fecha'>) => {
+    const docRef = await addDoc(collection(db, 'mediciones_velocidad'), {
+        ...medicion,
+        fecha: serverTimestamp()
+    });
+
+    const teoText = medicion.velocidadTeorica 
+        ? ` (Teórica: ${medicion.velocidadTeorica} UPM - ${medicion.velocidadUPM >= medicion.velocidadTeorica ? 'Por encima' : 'Por debajo'})` 
+        : '';
+    const notasText = medicion.notas ? ` | Nota: ${medicion.notas}` : '';
+
+    await addEventoLog(
+        medicion.procesoId,
+        "Medición de Velocidad",
+        `${medicion.nombreColaborador}: ${medicion.velocidadUPM} UPM (${medicion.muestras} muestras en ${medicion.duracionSegundos.toFixed(1)}s)${teoText}${notasText}`,
+        "SUPERVISIÓN",
+        medicion.registradoPor
+    );
+
+    return docRef;
+};
+
+export const subscribeMedicionesVelocidad = (procesoId: string, callback: (mediciones: MedicionVelocidad[]) => void) => {
+    const q = query(
+        collection(db, 'mediciones_velocidad'),
+        where('procesoId', '==', procesoId)
+    );
+    return onSnapshot(q, (snapshot) => {
+        const mediciones = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as MedicionVelocidad))
+            .sort((a, b) => {
+                const timeA = a.fecha?.toMillis?.() || 0;
+                const timeB = b.fecha?.toMillis?.() || 0;
+                return timeB - timeA; // Descendente: más recientes primero
+            });
+        callback(mediciones);
+    });
+};
+
+export const getMedicionesVelocidadByProceso = async (procesoId: string): Promise<MedicionVelocidad[]> => {
+    const q = query(
+        collection(db, 'mediciones_velocidad'),
+        where('procesoId', '==', procesoId)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as MedicionVelocidad))
+        .sort((a, b) => {
+            const timeA = a.fecha?.toMillis?.() || 0;
+            const timeB = b.fecha?.toMillis?.() || 0;
+            return timeB - timeA;
+        });
+};
+
 
 

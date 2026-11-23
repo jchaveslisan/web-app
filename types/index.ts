@@ -142,3 +142,23 @@ export interface MotivoCorreccion {
     activo: boolean;
 }
 
+export interface MedicionVelocidad {
+    id?: string;
+    procesoId: string;
+    colaboradorId: string;
+    colaboradorLogId?: string;
+    nombreColaborador: string;
+    ordenProduccion: string;
+    producto: string;
+    lote: string;
+    etapa: string;
+    velocidadUPM: number;
+    velocidadTeorica?: number;
+    muestras: number;
+    duracionSegundos: number;
+    notas?: string;
+    registradoPor: string;
+    fecha: any; // Firestore Timestamp
+}
+
+

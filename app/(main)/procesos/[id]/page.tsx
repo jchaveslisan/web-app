@@ -23,12 +23,15 @@ import {
     Plus,
     Minus,
     Maximize2,
-    MessageSquare
+    MessageSquare,
+    Gauge,
+    TrendingUp,
+    TrendingDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProcesoRealtime } from '@/hooks/useProcesoRealtime';
 import { format, differenceInSeconds, addSeconds } from 'date-fns';
-import { updateProceso, addEventoLog, updateDoc, getColaboradorByClave, addColaboradorToLog, getColaboradoresActivos, clearActiveColaboradoresCache, subscribeComentarios } from '@/lib/firebase-db';
+import { updateProceso, addEventoLog, updateDoc, getColaboradorByClave, addColaboradorToLog, getColaboradoresActivos, clearActiveColaboradoresCache, subscribeComentarios, subscribeMedicionesVelocidad } from '@/lib/firebase-db';
 import { useAuthStore } from '@/lib/auth-service';
 import ModalAddColaborador from '@/components/proceso/ModalAddColaborador';
 import ModalJustificacion from '@/components/proceso/ModalJustificacion';
@@ -36,10 +39,12 @@ import ModalBulkExit from '@/components/proceso/ModalBulkExit';
 import ModalEditarProceso from '@/components/proceso/ModalEditarProceso';
 import ModalAddComentario from '@/components/proceso/ModalAddComentario';
 import ModalCorregirComentario from '@/components/proceso/ModalCorregirComentario';
+import ModalMedirVelocidad from '@/components/proceso/ModalMedirVelocidad';
+import ModalHistorialVelocidades from '@/components/proceso/ModalHistorialVelocidades';
 import { doc, Timestamp, increment } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { calculateProductivity, ProductivityStats, formatSeconds } from '@/lib/productivity-utils';
-import { ColaboradorMaestro, Comentario } from '@/types';
+import { ColaboradorMaestro, Comentario, MedicionVelocidad, ColaboradorLog } from '@/types';
 
 // Helper para determinar el tipo de proceso (backward compatibility)
 const getTipoProcesoReal = (proceso: any) => {
@@ -124,6 +129,9 @@ export default function MonitoreoPage() {
     const [eventsModalTab, setEventsModalTab] = useState<'eventos' | 'comentarios'>('eventos');
     const [showEditModal, setShowEditModal] = useState(false);
     const [correctionModal, setCorrectionModal] = useState<{ show: boolean; comentario: Comentario } | null>(null);
+    const [medicionesVelocidad, setMedicionesVelocidad] = useState<MedicionVelocidad[]>([]);
+    const [selectedColabVelocidad, setSelectedColabVelocidad] = useState<ColaboradorLog | null>(null);
+    const [showModalHistorialVelocidad, setShowModalHistorialVelocidad] = useState(false);
 
     // Sincronizar unidades calculadas con el valor de la base de datos cuando cambia
     useEffect(() => {
@@ -137,6 +145,15 @@ export default function MonitoreoPage() {
         if (!id) return;
         const unsubscribe = subscribeComentarios(id, (coms) => {
             setComentarios(coms);
+        });
+        return () => unsubscribe();
+    }, [id]);
+
+    // Suscribirse a mediciones de velocidad en tiempo real
+    useEffect(() => {
+        if (!id) return;
+        const unsubscribe = subscribeMedicionesVelocidad(id, (meds) => {
+            setMedicionesVelocidad(meds);
         });
         return () => unsubscribe();
     }, [id]);
@@ -997,12 +1014,24 @@ export default function MonitoreoPage() {
                                         <Users className="h-4 w-4 text-success-green" />
                                         <h3 className="text-[clamp(0.6rem,0.9vw,0.75rem)] font-black tracking-[0.2em] uppercase text-gray-400">PERSONAL EN LÍNEA</h3>
                                     </div>
-                                    <button
-                                        onClick={() => setShowStaffModal(true)}
-                                        className="px-3 py-1 bg-success-green/10 text-success-green rounded-full text-[clamp(0.5rem,0.7vw,0.6rem)] font-black border border-success-green/20 hover:bg-success-green/20 transition-all uppercase tracking-widest"
-                                    >
-                                        {personalActivo} ACTIVOS – VER LISTA
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        {getTipoProcesoReal(proceso) === 'empaque' && ['supervisor', 'superadmin'].includes(user?.rol || '') && medicionesVelocidad.length > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowModalHistorialVelocidad(true)}
+                                                className="px-3 py-1 bg-cyan-500/10 text-cyan-400 rounded-full text-[clamp(0.5rem,0.7vw,0.6rem)] font-black border border-cyan-500/20 hover:bg-cyan-500/20 transition-all uppercase tracking-widest flex items-center gap-1.5"
+                                                title="Ver historial de velocidades de empaque"
+                                            >
+                                                <Gauge className="h-3 w-3" /> {medicionesVelocidad.length} VELOCIDADES
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => setShowStaffModal(true)}
+                                            className="px-3 py-1 bg-success-green/10 text-success-green rounded-full text-[clamp(0.5rem,0.7vw,0.6rem)] font-black border border-success-green/20 hover:bg-success-green/20 transition-all uppercase tracking-widest"
+                                        >
+                                            {personalActivo} ACTIVOS – VER LISTA
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="flex flex-col md:flex-row gap-4 items-stretch w-full mt-6">
                                     {/* Caja 1: Colaborador Base */}
@@ -1230,8 +1259,30 @@ export default function MonitoreoPage() {
                         setTimeout(() => setStaffMessage(null), 4000);
                     }}
                 />
-            )
-            }
+            )}
+
+            {/* MODAL DE MEDICIÓN DE VELOCIDAD DE EMPAQUE */}
+            {selectedColabVelocidad && (
+                <ModalMedirVelocidad
+                    proceso={proceso}
+                    colaborador={selectedColabVelocidad}
+                    currentUser={user?.username || 'supervisor'}
+                    onClose={() => setSelectedColabVelocidad(null)}
+                    onSuccess={(msg) => {
+                        setStaffMessage({ text: msg, type: 'success' });
+                        setTimeout(() => setStaffMessage(null), 4000);
+                    }}
+                />
+            )}
+
+            {/* MODAL DE HISTORIAL DE VELOCIDADES DE EMPAQUE */}
+            {showModalHistorialVelocidad && (
+                <ModalHistorialVelocidades
+                    proceso={proceso}
+                    mediciones={medicionesVelocidad}
+                    onClose={() => setShowModalHistorialVelocidad(false)}
+                />
+            )}
 
             {/* MODAL TIPO DE PERSONAL (INGRESO) */}
             {
@@ -1301,8 +1352,21 @@ export default function MonitoreoPage() {
                                 </button>
                             </div>
                             <div className="p-8 overflow-auto flex-1 space-y-4">
-                                <div className="flex justify-between items-center mb-4">
+                                <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
                                     <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">Colaboradores cargados en el proceso</p>
+                                    {getTipoProcesoReal(proceso) === 'empaque' && ['supervisor', 'superadmin'].includes(user?.rol || '') && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowStaffModal(false);
+                                                setShowModalHistorialVelocidad(true);
+                                            }}
+                                            className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-3.5 py-1.5 rounded-xl font-black text-xs uppercase flex items-center gap-2 hover:bg-cyan-500/20 transition-all shrink-0 shadow-lg shadow-cyan-500/10"
+                                        >
+                                            <Gauge className="h-3.5 w-3.5" />
+                                            <span>HISTORIAL VELOCIDADES ({medicionesVelocidad.length})</span>
+                                        </button>
+                                    )}
                                 </div>
                                 {(() => {
                                     const activos = colaboradores.filter(c => !c.horaSalida);
@@ -1361,11 +1425,65 @@ export default function MonitoreoPage() {
                                                                         </p>
                                                                     </div>
                                                                 </div>
-                                                                <div className="flex items-center gap-6">
-                                                                    <div className="text-right hidden sm:block">
+                                                                <div className="flex items-center gap-3 sm:gap-5">
+                                                                    {/* ÚLTIMA VELOCIDAD REGISTRADA */}
+                                                                    {(() => {
+                                                                        const ultimaMed = medicionesVelocidad.find(m => m.colaboradorId === colab.colaboradorId);
+                                                                        if (!ultimaMed) return null;
+                                                                        const teorica = proceso.velocidadTeorica || 0;
+                                                                        const hasTeorica = teorica > 0;
+                                                                        const diff = hasTeorica ? Number((ultimaMed.velocidadUPM - teorica).toFixed(1)) : 0;
+                                                                        const esMayorOIgual = diff >= 0;
+                                                                        const pct = hasTeorica ? Math.round((ultimaMed.velocidadUPM / teorica) * 100) : null;
+
+                                                                        return (
+                                                                            <div className="text-right">
+                                                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Últ. Velocidad</p>
+                                                                                <div className="flex items-center justify-end gap-1.5 mt-0.5">
+                                                                                    <span className="font-mono text-xs sm:text-sm font-black text-white">
+                                                                                        {ultimaMed.velocidadUPM} <span className="text-[9px] text-cyan-400 font-mono">UPM</span>
+                                                                                    </span>
+                                                                                    {hasTeorica && (
+                                                                                        <span
+                                                                                            className={cn(
+                                                                                                "px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-black border flex items-center gap-0.5",
+                                                                                                esMayorOIgual
+                                                                                                    ? "bg-success-green/10 text-success-green border-success-green/20"
+                                                                                                    : "bg-danger-red/10 text-danger-red border-danger-red/20"
+                                                                                            )}
+                                                                                            title={`Teórica: ${teorica} UPM (${pct}%)`}
+                                                                                        >
+                                                                                            {esMayorOIgual ? (
+                                                                                                <TrendingUp className="h-2.5 w-2.5" />
+                                                                                            ) : (
+                                                                                                <TrendingDown className="h-2.5 w-2.5" />
+                                                                                            )}
+                                                                                            {esMayorOIgual ? `+${diff}` : diff}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })()}
+
+                                                                    <div className="text-right hidden md:block">
                                                                         <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Estado</p>
                                                                         <p className="font-mono text-xs text-success-green font-bold animate-pulse uppercase">En Línea</p>
                                                                     </div>
+
+                                                                    {/* BOTÓN MEDIR VELOCIDAD (SOLO SUPERVISOR/SUPERADMIN Y EMPAQUE) */}
+                                                                    {['supervisor', 'superadmin'].includes(user?.rol || '') && getTipoProcesoReal(proceso) === 'empaque' && proceso.estado !== 'Finalizado' && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setSelectedColabVelocidad(colab)}
+                                                                            className="p-3 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500 hover:text-black rounded-xl transition-all shadow-lg flex items-center gap-1.5 font-black text-xs uppercase border border-cyan-500/20"
+                                                                            title="Medir Velocidad de Empaque"
+                                                                        >
+                                                                            <Gauge className="h-4 w-4" />
+                                                                            <span className="hidden sm:inline">MEDIR</span>
+                                                                        </button>
+                                                                    )}
+
                                                                     {proceso.estado !== 'Finalizado' && (
                                                                         <button
                                                                             onClick={() => handleSalidaColaborador(colab.id, colab.nombre)}
