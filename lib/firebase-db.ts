@@ -571,22 +571,45 @@ export const getMotivosCorreccion = async (): Promise<MotivoCorreccion[]> => {
 
 // --- MEDICIONES DE VELOCIDAD DE EMPAQUE ---
 export const addMedicionVelocidad = async (medicion: Omit<MedicionVelocidad, 'id' | 'fecha'>) => {
-    const docRef = await addDoc(collection(db, 'mediciones_velocidad'), {
-        ...medicion,
+    // Sanitizar objeto para evitar que Firestore rechace campos con valor `undefined`
+    const dataToSave: Record<string, any> = {
+        procesoId: medicion.procesoId || '',
+        colaboradorId: medicion.colaboradorId || '',
+        nombreColaborador: medicion.nombreColaborador || '',
+        ordenProduccion: medicion.ordenProduccion || '',
+        producto: medicion.producto || '',
+        lote: medicion.lote || '',
+        etapa: medicion.etapa || '',
+        velocidadUPM: Number(medicion.velocidadUPM) || 0,
+        muestras: Number(medicion.muestras) || 0,
+        duracionSegundos: Number(medicion.duracionSegundos) || 0,
+        registradoPor: medicion.registradoPor || 'supervisor',
         fecha: serverTimestamp()
-    });
+    };
 
-    const teoText = medicion.velocidadTeorica 
-        ? ` (Teórica: ${medicion.velocidadTeorica} UPM - ${medicion.velocidadUPM >= medicion.velocidadTeorica ? 'Por encima' : 'Por debajo'})` 
+    if (medicion.colaboradorLogId) {
+        dataToSave.colaboradorLogId = medicion.colaboradorLogId;
+    }
+    if (typeof medicion.velocidadTeorica === 'number' && !isNaN(medicion.velocidadTeorica) && medicion.velocidadTeorica > 0) {
+        dataToSave.velocidadTeorica = medicion.velocidadTeorica;
+    }
+    if (medicion.notas && typeof medicion.notas === 'string' && medicion.notas.trim() !== '') {
+        dataToSave.notas = medicion.notas.trim();
+    }
+
+    const docRef = await addDoc(collection(db, 'mediciones_velocidad'), dataToSave);
+
+    const teoText = dataToSave.velocidadTeorica 
+        ? ` (Teórica: ${dataToSave.velocidadTeorica} UPM - ${dataToSave.velocidadUPM >= dataToSave.velocidadTeorica ? 'Por encima' : 'Por debajo'})` 
         : '';
-    const notasText = medicion.notas ? ` | Nota: ${medicion.notas}` : '';
+    const notasText = dataToSave.notas ? ` | Nota: ${dataToSave.notas}` : '';
 
     await addEventoLog(
-        medicion.procesoId,
+        dataToSave.procesoId,
         "Medición de Velocidad",
-        `${medicion.nombreColaborador}: ${medicion.velocidadUPM} UPM (${medicion.muestras} muestras en ${medicion.duracionSegundos.toFixed(1)}s)${teoText}${notasText}`,
+        `${dataToSave.nombreColaborador}: ${dataToSave.velocidadUPM} UPM (${dataToSave.muestras} muestras en ${dataToSave.duracionSegundos.toFixed(1)}s)${teoText}${notasText}`,
         "SUPERVISIÓN",
-        medicion.registradoPor
+        dataToSave.registradoPor
     );
 
     return docRef;

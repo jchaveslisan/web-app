@@ -118,25 +118,28 @@ export default function ModalAddComentario({ proceso, colaboradores, onClose, on
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="glass w-full max-w-lg rounded-[2.5rem] overflow-hidden flex flex-col border border-white/10 shadow-2xl animate-in zoom-in duration-300 bg-background-dark/95">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+      <div className={cn(
+        "glass w-full rounded-[2.5rem] overflow-hidden flex flex-col border border-white/10 shadow-2xl animate-in zoom-in duration-300 bg-background-dark/95 max-h-[92vh] transition-all duration-300",
+        step === 'pin' ? "max-w-xl" : "max-w-4xl"
+      )}>
         
         {/* Header */}
-        <div className="p-6 border-b border-white/10 flex items-center justify-between bg-white/5">
-          <h3 className="text-xl font-black uppercase flex items-center gap-3 tracking-wider">
-            <MessageSquare className="h-6 w-6 text-primary-blue animate-pulse" /> AGREGAR OBSERVACIÓN
+        <div className="p-6 md:p-7 border-b border-white/10 flex items-center justify-between bg-white/5">
+          <h3 className="text-xl md:text-2xl font-black uppercase flex items-center gap-3 tracking-wider text-white">
+            <MessageSquare className="h-6 w-6 md:h-7 md:w-7 text-primary-blue animate-pulse" /> AGREGAR OBSERVACIÓN
           </h3>
           <button 
             onClick={onClose} 
             disabled={loading}
-            className="p-2 hover:bg-white/10 text-gray-400 hover:text-white rounded-full transition-colors"
+            className="p-2.5 hover:bg-white/10 text-gray-400 hover:text-white rounded-full transition-colors"
           >
             <X className="h-6 w-6" />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="p-8 space-y-6">
+        <div className="p-6 md:p-8 space-y-6 overflow-y-auto flex-1">
           {success ? (
             <div className="flex flex-col items-center justify-center py-10 gap-4 text-center animate-in zoom-in-95 duration-300">
               <CheckCircle2 className="h-16 w-16 text-success-green animate-bounce" />
@@ -208,18 +211,25 @@ export default function ModalAddComentario({ proceso, colaboradores, onClose, on
               ) : (
                 /* PASO 2: INGRESO DE COMENTARIO */
                 <form onSubmit={handleSaveComment} className="space-y-6">
-                  <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
-                    <div className="w-10 h-10 rounded-full bg-primary-blue text-white flex items-center justify-center font-black text-sm uppercase">
+                  <div className="flex items-center gap-4 bg-white/5 p-5 rounded-2xl border border-white/5">
+                    <div className="w-12 h-12 rounded-full bg-primary-blue text-white flex items-center justify-center font-black text-base uppercase shrink-0">
                       {collaborator?.nombreCompleto.substring(0, 2)}
                     </div>
                     <div>
                       <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Colaborador Identificado</p>
-                      <h4 className="font-black text-white uppercase text-base">{collaborator?.nombreCompleto}</h4>
+                      <h4 className="font-black text-white uppercase text-base md:text-lg">{collaborator?.nombreCompleto}</h4>
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="block text-xs font-black text-gray-500 uppercase tracking-widest">Observación / Comentario</label>
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-black text-gray-400 uppercase tracking-widest">
+                        Observación / Comentario
+                      </label>
+                      <span className="text-[11px] text-gray-500 font-mono">
+                        {comentarioText.length} caracteres
+                      </span>
+                    </div>
                     <textarea
                       ref={commentTextareaRef}
                       value={comentarioText}
@@ -229,12 +239,12 @@ export default function ModalAddComentario({ proceso, colaboradores, onClose, on
                       }}
                       placeholder="Escriba aquí los detalles sobre el proceso, retraso, ajuste de máquina u otra novedad..."
                       disabled={loading}
-                      rows={5}
-                      className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-white focus:ring-2 focus:ring-primary-blue focus:border-primary-blue outline-none transition-all placeholder:text-gray-500 font-medium leading-relaxed resize-none"
+                      rows={11}
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-white text-base focus:ring-2 focus:ring-primary-blue focus:border-primary-blue outline-none transition-all placeholder:text-gray-500 font-medium leading-relaxed resize-y min-h-[260px] md:min-h-[340px]"
                     />
                   </div>
 
-                  <div className="flex gap-4">
+                  <div className="flex gap-4 pt-2">
                     <button
                       type="button"
                       onClick={() => setStep('pin')}
@@ -246,7 +256,7 @@ export default function ModalAddComentario({ proceso, colaboradores, onClose, on
                     <button
                       type="submit"
                       disabled={loading || !comentarioText.trim()}
-                      className="flex-1 py-4 bg-success-green text-black disabled:opacity-50 disabled:cursor-not-allowed rounded-2xl font-black transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-xs shadow-lg shadow-success-green/10"
+                      className="flex-1 py-4 bg-success-green text-black disabled:opacity-50 disabled:cursor-not-allowed rounded-2xl font-black transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-xs shadow-lg shadow-success-green/10 hover:bg-emerald-400 cursor-pointer"
                     >
                       {loading ? 'Guardando...' : 'Guardar Observación'}
                     </button>

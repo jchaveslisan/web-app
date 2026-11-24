@@ -122,22 +122,29 @@ export default function ModalMedirVelocidad({
     setError('');
 
     try {
-      await addMedicionVelocidad({
+      const payload: any = {
         procesoId: proceso.id,
         colaboradorId: colaborador.colaboradorId,
         colaboradorLogId: colaborador.id,
         nombreColaborador: colaborador.nombre,
-        ordenProduccion: proceso.ordenProduccion,
-        producto: proceso.producto,
-        lote: proceso.lote,
-        etapa: proceso.etapa,
+        ordenProduccion: proceso.ordenProduccion || '',
+        producto: proceso.producto || '',
+        lote: proceso.lote || '',
+        etapa: proceso.etapa || '',
         velocidadUPM,
-        velocidadTeorica: velocidadTeorica || undefined,
         muestras: muestrasCompletadas,
         duracionSegundos: duracionRealSegundos,
-        notas: notas.trim() || undefined,
         registradoPor: currentUser
-      });
+      };
+
+      if (velocidadTeorica > 0) {
+        payload.velocidadTeorica = velocidadTeorica;
+      }
+      if (notas.trim()) {
+        payload.notas = notas.trim();
+      }
+
+      await addMedicionVelocidad(payload);
 
       onSuccess(`Velocidad de ${colaborador.nombre} registrada exitosamente: ${velocidadUPM} UPM.`);
       onClose();
